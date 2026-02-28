@@ -6,8 +6,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+asyncpg://investagent:investagent@localhost:5432/investagent"
-    database_url_sync: str = "postgresql://investagent:investagent@localhost:5432/investagent"
+    database_url: str = "postgresql+asyncpg://investagent:investagent@localhost:5433/investagent"
+    database_url_sync: str = "postgresql://investagent:investagent@localhost:5433/investagent"
 
     google_client_id: str = ""
     google_client_secret: str = ""
