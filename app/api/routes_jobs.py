@@ -171,7 +171,11 @@ async def stream_job(job_id: uuid.UUID, user: User = Depends(get_current_user)):
             yield {"event": "done", "data": ""}
             return
 
-        # Live streaming while the job runs.
+        # Replay lines already logged before this SSE client connected.
+        for line in list(job.log_lines):
+            yield {"event": "message", "data": json.dumps({"line": line})}
+
+        # Live streaming — new lines arrive via the queue.
         while True:
             try:
                 item = await asyncio.get_event_loop().run_in_executor(
@@ -206,4 +210,24 @@ async def cancel_job(
     _job_queue.remove(job_id)
     await _registry.persist(job, db)
 
+    return {"ok": True}
+
+
+@router.delete("/{job_id}")
+async def delete_job(
+    job_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a finished/failed/cancelled job from history."""
+    if not _registry.delete(job_id, user.id):
+        job = _registry.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete a running or queued job. Cancel it first.",
+        )
+
+    await _registry.delete_from_db(job_id, db)
     return {"ok": True}

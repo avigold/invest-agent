@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     stripe_price_id: str = ""
     stripe_webhook_secret: str = ""
 
+    fred_api_key: str = ""
+    artefact_storage_dir: str = "./data/artefacts"
+
     app_url: str = "http://localhost:3000"
 
     max_concurrent_heavy_jobs: int = 4

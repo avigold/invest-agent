@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 from jose import jwt
@@ -86,5 +86,10 @@ def test_logout():
 
 def test_google_login_not_configured():
     """When GOOGLE_CLIENT_ID is not set, return 501."""
-    r = client.get("/auth/google")
+    from app.config import Settings
+
+    empty_settings = Settings(google_client_id="", google_client_secret="")
+
+    with patch("app.api.auth.get_settings", return_value=empty_settings):
+        r = client.get("/auth/google")
     assert r.status_code == 501

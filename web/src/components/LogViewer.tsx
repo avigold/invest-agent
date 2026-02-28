@@ -1,54 +1,65 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { apiJson } from "@/lib/api";
 
 interface LogViewerProps {
   jobId: string;
   status: string;
 }
 
+interface JobLogResponse {
+  log_text: string | null;
+  status: string;
+}
+
 export default function LogViewer({ jobId, status }: LogViewerProps) {
   const [lines, setLines] = useState<string[]>([]);
-  const [connected, setConnected] = useState(false);
+  const [live, setLive] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const es = new EventSource(`/api/jobs/${jobId}/stream`, {
-      withCredentials: true,
-    });
+    if (status === "queued") {
+      setLines(["Waiting in queue..."]);
+      setLive(false);
+      return;
+    }
 
-    es.onopen = () => setConnected(true);
+    // Fetch logs immediately, then poll while running
+    let cancelled = false;
 
-    es.onmessage = (e) => {
+    const fetchLogs = async () => {
       try {
-        const data = JSON.parse(e.data);
-        if (data.line) {
-          setLines((prev) => [...prev, data.line]);
+        const data = await apiJson<JobLogResponse>(`/api/jobs/${jobId}`);
+        if (cancelled) return;
+        if (data.log_text) {
+          setLines(data.log_text.split("\n"));
+        }
+        if (data.status === "running") {
+          setLive(true);
+        } else {
+          setLive(false);
         }
       } catch {
-        // ignore parse errors
+        // ignore
       }
     };
 
-    es.addEventListener("done", () => {
-      setConnected(false);
-      es.close();
-    });
+    fetchLogs();
 
-    es.addEventListener("queued", () => {
-      setLines(["Waiting in queue..."]);
-      es.close();
-    });
-
-    es.onerror = () => {
-      setConnected(false);
-      es.close();
-    };
+    if (status === "running") {
+      setLive(true);
+      const id = setInterval(fetchLogs, 1000);
+      return () => {
+        cancelled = true;
+        clearInterval(id);
+      };
+    }
 
     return () => {
-      es.close();
+      cancelled = true;
     };
-  }, [jobId]);
+  }, [jobId, status]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -61,7 +72,7 @@ export default function LogViewer({ jobId, status }: LogViewerProps) {
     <div className="rounded-lg border border-gray-800 bg-gray-950">
       <div className="flex items-center justify-between border-b border-gray-800 px-4 py-2">
         <span className="text-xs font-medium text-gray-400">Output</span>
-        {connected && (
+        {live && (
           <span className="flex items-center gap-1.5 text-xs text-green-400">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
             Live

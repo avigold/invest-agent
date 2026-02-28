@@ -352,5 +352,5 @@ Internal weights are not exposed to the user. The focus is on "here's your score
 - [ ] Investable countries list (user to provide)
 - [ ] Exact Free tier monthly quotas
 - [ ] Pro tier pricing
-- [ ] GDELT stability index transform specification
-- [ ] EOD market data provider selection
+- [x] GDELT stability index transform specification — resolved in PRD 2.0 (DOC 2.0 API, theme-based instability volume)
+- [x] EOD market data provider selection — yfinance for MVP

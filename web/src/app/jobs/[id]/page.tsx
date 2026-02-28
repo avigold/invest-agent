@@ -58,6 +58,15 @@ export default function JobDetailPage() {
     }
   };
 
+  const handleDelete = async () => {
+    try {
+      await apiJson(`/api/jobs/${id}`, { method: "DELETE" });
+      router.push("/jobs");
+    } catch {
+      // ignore
+    }
+  };
+
   if (loading || !user) return null;
 
   if (error) {
@@ -93,14 +102,24 @@ export default function JobDetailPage() {
             )}
           </div>
         </div>
-        {["running", "queued"].includes(job.status) && (
-          <button
-            onClick={handleCancel}
-            className="rounded border border-red-800 px-3 py-1.5 text-sm text-red-400 hover:bg-red-900/30"
-          >
-            Cancel
-          </button>
-        )}
+        <div className="flex gap-2">
+          {["running", "queued"].includes(job.status) && (
+            <button
+              onClick={handleCancel}
+              className="rounded border border-red-800 px-3 py-1.5 text-sm text-red-400 hover:bg-red-900/30"
+            >
+              Cancel
+            </button>
+          )}
+          {!["running", "queued"].includes(job.status) && (
+            <button
+              onClick={handleDelete}
+              className="rounded border border-gray-700 px-3 py-1.5 text-sm text-gray-400 hover:bg-gray-800"
+            >
+              Delete
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="mb-6 grid grid-cols-3 gap-4 rounded-lg border border-gray-800 bg-gray-900 p-4 text-sm">

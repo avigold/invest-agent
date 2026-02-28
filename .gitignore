@@ -46,6 +46,7 @@ htmlcov/
 *.sqlite3
 
 # Artefact storage (local dev)
+data/
 artefacts/
 
 # Docker

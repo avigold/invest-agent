@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_user
+from app.config import Settings
 from app.db.models import User
 from app.db.session import get_db
 from app.main import app
@@ -38,6 +39,8 @@ def _mock_user(user: User):
     return override
 
 
+_empty_stripe = Settings(stripe_secret_key="", stripe_price_id="", stripe_webhook_secret="")
+
 client = TestClient(app)
 
 
@@ -48,7 +51,8 @@ def test_checkout_not_configured():
     app.dependency_overrides[get_db] = _mock_db()
 
     try:
-        r = client.post("/api/stripe/create-checkout-session")
+        with patch("app.api.stripe_routes.get_settings", return_value=_empty_stripe):
+            r = client.post("/api/stripe/create-checkout-session")
         assert r.status_code == 501
     finally:
         app.dependency_overrides.clear()
@@ -60,7 +64,8 @@ def test_portal_not_configured():
     app.dependency_overrides[get_db] = _mock_db()
 
     try:
-        r = client.post("/api/stripe/create-portal-session")
+        with patch("app.api.stripe_routes.get_settings", return_value=_empty_stripe):
+            r = client.post("/api/stripe/create-portal-session")
         assert r.status_code == 501
     finally:
         app.dependency_overrides.clear()
@@ -72,9 +77,10 @@ def test_checkout_requires_auth():
 
 
 def test_webhook_not_configured():
-    r = client.post(
-        "/api/stripe/webhook",
-        content=b"{}",
-        headers={"Stripe-Signature": "test"},
-    )
+    with patch("app.api.stripe_routes.get_settings", return_value=_empty_stripe):
+        r = client.post(
+            "/api/stripe/webhook",
+            content=b"{}",
+            headers={"Stripe-Signature": "test"},
+        )
     assert r.status_code == 501

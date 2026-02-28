@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import StatusBadge from "./StatusBadge";
+import { apiJson } from "@/lib/api";
 
 export interface JobRow {
   id: string;
@@ -27,7 +28,12 @@ function duration(start: string | null, end: string | null): string {
   return `${Math.floor(sec / 60)}m ${sec % 60}s`;
 }
 
-export default function JobsTable({ jobs }: { jobs: JobRow[] }) {
+interface JobsTableProps {
+  jobs: JobRow[];
+  onRefresh?: () => void;
+}
+
+export default function JobsTable({ jobs, onRefresh }: JobsTableProps) {
   if (jobs.length === 0) {
     return (
       <p className="py-12 text-center text-gray-500">
@@ -35,6 +41,24 @@ export default function JobsTable({ jobs }: { jobs: JobRow[] }) {
       </p>
     );
   }
+
+  const handleCancel = async (jobId: string) => {
+    try {
+      await apiJson(`/api/jobs/${jobId}/cancel`, { method: "POST" });
+      onRefresh?.();
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleDelete = async (jobId: string) => {
+    try {
+      await apiJson(`/api/jobs/${jobId}`, { method: "DELETE" });
+      onRefresh?.();
+    } catch {
+      // ignore
+    }
+  };
 
   return (
     <div className="overflow-x-auto">
@@ -45,6 +69,9 @@ export default function JobsTable({ jobs }: { jobs: JobRow[] }) {
             <th className="px-4 py-3 font-medium">Status</th>
             <th className="px-4 py-3 font-medium">Queued</th>
             <th className="px-4 py-3 font-medium">Duration</th>
+            {onRefresh && (
+              <th className="px-4 py-3 font-medium text-right">Actions</th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -70,6 +97,28 @@ export default function JobsTable({ jobs }: { jobs: JobRow[] }) {
               <td className="px-4 py-3 text-gray-400">
                 {duration(job.started_at, job.finished_at)}
               </td>
+              {onRefresh && (
+                <td className="px-4 py-3 text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    {(job.status === "running" || job.status === "queued") && (
+                      <button
+                        onClick={() => handleCancel(job.id)}
+                        className="rounded border border-red-800 px-2 py-1 text-xs text-red-400 hover:bg-red-900/30"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                    {job.status !== "running" && job.status !== "queued" && (
+                      <button
+                        onClick={() => handleDelete(job.id)}
+                        className="rounded border border-gray-700 px-2 py-1 text-xs text-gray-400 hover:bg-gray-800"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

@@ -1,0 +1,128 @@
+{
+  "version": "v1",
+  "countries": [
+    {
+      "iso2": "US",
+      "iso3": "USA",
+      "name": "United States",
+      "equity_index_symbol": "^GSPC",
+      "equity_index_name": "S&P 500"
+    },
+    {
+      "iso2": "GB",
+      "iso3": "GBR",
+      "name": "United Kingdom",
+      "equity_index_symbol": "^FTSE",
+      "equity_index_name": "FTSE 100"
+    },
+    {
+      "iso2": "CA",
+      "iso3": "CAN",
+      "name": "Canada",
+      "equity_index_symbol": "^GSPTSE",
+      "equity_index_name": "S&P/TSX Composite"
+    },
+    {
+      "iso2": "AU",
+      "iso3": "AUS",
+      "name": "Australia",
+      "equity_index_symbol": "^AXJO",
+      "equity_index_name": "ASX 200"
+    },
+    {
+      "iso2": "JP",
+      "iso3": "JPN",
+      "name": "Japan",
+      "equity_index_symbol": "^N225",
+      "equity_index_name": "Nikkei 225"
+    },
+    {
+      "iso2": "DE",
+      "iso3": "DEU",
+      "name": "Germany",
+      "equity_index_symbol": "^GDAXI",
+      "equity_index_name": "DAX"
+    },
+    {
+      "iso2": "FR",
+      "iso3": "FRA",
+      "name": "France",
+      "equity_index_symbol": "^FCHI",
+      "equity_index_name": "CAC 40"
+    },
+    {
+      "iso2": "NL",
+      "iso3": "NLD",
+      "name": "Netherlands",
+      "equity_index_symbol": "^AEX",
+      "equity_index_name": "AEX"
+    },
+    {
+      "iso2": "CH",
+      "iso3": "CHE",
+      "name": "Switzerland",
+      "equity_index_symbol": "^SSMI",
+      "equity_index_name": "SMI"
+    },
+    {
+      "iso2": "SE",
+      "iso3": "SWE",
+      "name": "Sweden",
+      "equity_index_symbol": "OMXS30",
+      "equity_index_name": "OMXS30"
+    }
+  ],
+  "world_bank_indicators": {
+    "gdp": "NY.GDP.MKTP.CD",
+    "gdp_growth": "NY.GDP.MKTP.KD.ZG",
+    "inflation": "FP.CPI.TOTL.ZG",
+    "unemployment": "SL.UEM.TOTL.ZS",
+    "current_account_gdp": "BN.CAB.XOKA.GD.ZS",
+    "fdi_gdp": "BX.KLT.DINV.WD.GD.ZS",
+    "reserves": "FI.RES.TOTL.CD"
+  },
+  "imf_indicators": {
+    "govt_debt_gdp": "GGXWDG_NGDP"
+  },
+  "fred_series": {
+    "fedfunds": {
+      "series_id": "FEDFUNDS",
+      "name": "Federal Funds Rate",
+      "unit": "percent",
+      "frequency": "monthly"
+    },
+    "hy_spread": {
+      "series_id": "BAMLC0A4CBBB",
+      "name": "US HY Spread",
+      "unit": "percent",
+      "frequency": "daily"
+    },
+    "baa_spread": {
+      "series_id": "BAA10Y",
+      "name": "Baa-10Y Spread",
+      "unit": "percent",
+      "frequency": "daily"
+    },
+    "treasury_10y": {
+      "series_id": "DGS10",
+      "name": "10Y Treasury Yield",
+      "unit": "percent",
+      "frequency": "daily"
+    },
+    "yield_curve": {
+      "series_id": "T10Y2Y",
+      "name": "Yield Curve (10Y-2Y)",
+      "unit": "percent",
+      "frequency": "daily"
+    }
+  },
+  "scoring": {
+    "calc_version": "country_v1",
+    "summary_version": "country_summary_v1",
+    "weights": {
+      "macro": 0.45,
+      "market": 0.35,
+      "stability": 0.20
+    }
+  }
+}

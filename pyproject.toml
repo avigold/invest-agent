@@ -20,6 +20,7 @@ dependencies = [
     "typer>=0.15",
     "sse-starlette>=2.2",
     "psycopg2-binary>=2.9",
+    "yfinance>=0.2",
 ]
 
 [project.optional-dependencies]

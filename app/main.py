@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
+from app.api.routes_countries import router as countries_router
 from app.api.routes_jobs import init_job_globals, router as jobs_router
 from app.api.stripe_routes import router as stripe_router
 from app.config import get_settings
@@ -29,9 +30,9 @@ async def lifespan(app: FastAPI):
     job_queue = JobQueue(max_concurrent=settings.max_concurrent_heavy_jobs)
 
     session_factory = _get_session_factory()
-    run_fn = make_run_fn(registry, session_factory)
+    run_fn = make_run_fn(registry)
 
-    # Load existing jobs and cancel stale running ones
+    # Load existing jobs from DB for display
     try:
         async with session_factory() as db:
             await registry.load_existing(db)
@@ -65,6 +66,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(jobs_router)
     app.include_router(stripe_router)
+    app.include_router(countries_router)
 
     return app
 

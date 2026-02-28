@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,6 +36,8 @@ class LiveJob:
     finished_at: datetime | None = None
     log_lines: list[str] = field(default_factory=list, repr=False)
     queue: queue.Queue = field(default_factory=queue.Queue, repr=False)
+    artefact_ids: list[str] | None = None
+    packet_id: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -56,18 +58,23 @@ class JobRegistry:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._jobs: dict[uuid.UUID, LiveJob] = {}
+        self._active_ids: set[uuid.UUID] = set()  # jobs created in this server lifetime
 
     async def load_existing(self, db: AsyncSession) -> None:
-        """Load recent jobs from DB. Mark any 'running' as 'cancelled'."""
-        # Cancel stale running jobs in DB
+        """Load recent jobs from DB for display.
+
+        Jobs stuck in 'running' or 'queued' from a previous server lifetime
+        cannot actually be running — mark them 'failed' in the DB so they
+        don't show misleading status.
+        """
+        from sqlalchemy import update
         await db.execute(
             update(JobModel)
-            .where(JobModel.status == "running")
-            .values(status="cancelled", finished_at=_utcnow())
+            .where(JobModel.status.in_(["running", "queued"]))
+            .values(status="failed", finished_at=_utcnow())
         )
         await db.commit()
 
-        # Load recent jobs into memory
         result = await db.execute(
             select(JobModel).order_by(JobModel.queued_at.desc()).limit(200)
         )
@@ -105,6 +112,7 @@ class JobRegistry:
         )
         with self._lock:
             self._jobs[job.id] = job
+            self._active_ids.add(job.id)
         return job
 
     def get(self, job_id: uuid.UUID) -> LiveJob | None:
@@ -117,12 +125,36 @@ class JobRegistry:
         return sorted(jobs, key=lambda j: j.queued_at, reverse=True)
 
     def has_running_job(self, user_id: uuid.UUID) -> bool:
-        """Return True if the user has a running or queued job."""
+        """Return True if the user has an active running or queued job.
+
+        Only considers jobs created in this server lifetime — stale jobs
+        from a previous process cannot actually be running.
+        """
         with self._lock:
             return any(
-                j.user_id == user_id and j.status in ("running", "queued")
+                j.id in self._active_ids
+                and j.user_id == user_id
+                and j.status in ("running", "queued")
                 for j in self._jobs.values()
             )
+
+    def delete(self, job_id: uuid.UUID, user_id: uuid.UUID) -> bool:
+        """Remove a finished job from memory. Returns True if found and deleted."""
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None or job.user_id != user_id:
+                return False
+            if job.status in ("running", "queued"):
+                return False  # must cancel first
+            del self._jobs[job_id]
+            self._active_ids.discard(job_id)
+        return True
+
+    async def delete_from_db(self, job_id: uuid.UUID, db: AsyncSession) -> None:
+        """Delete a job row from Postgres."""
+        from sqlalchemy import delete as sql_delete
+        await db.execute(sql_delete(JobModel).where(JobModel.id == job_id))
+        await db.commit()
 
     def mark_cancelled(self, job_id: uuid.UUID) -> bool:
         """Mark a running or queued job as cancelled. Returns True if found."""
@@ -137,6 +169,7 @@ class JobRegistry:
 
     async def persist(self, job: LiveJob, db: AsyncSession) -> None:
         """Upsert job state to Postgres."""
+        packet_uuid = uuid.UUID(job.packet_id) if job.packet_id else None
         stmt = pg_insert(JobModel).values(
             id=job.id,
             user_id=job.user_id,
@@ -147,6 +180,8 @@ class JobRegistry:
             started_at=job.started_at,
             finished_at=job.finished_at,
             log_text="\n".join(job.log_lines) if job.log_lines else None,
+            artefact_ids=job.artefact_ids,
+            packet_id=packet_uuid,
         )
         stmt = stmt.on_conflict_do_update(
             index_elements=["id"],
@@ -155,6 +190,8 @@ class JobRegistry:
                 "started_at": stmt.excluded.started_at,
                 "finished_at": stmt.excluded.finished_at,
                 "log_text": stmt.excluded.log_text,
+                "artefact_ids": stmt.excluded.artefact_ids,
+                "packet_id": stmt.excluded.packet_id,
             },
         )
         await db.execute(stmt)

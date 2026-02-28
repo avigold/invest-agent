@@ -22,6 +22,12 @@ export default function NavBar() {
                 Dashboard
               </Link>
               <Link
+                href="/countries"
+                className="text-sm text-gray-400 hover:text-white"
+              >
+                Countries
+              </Link>
+              <Link
                 href="/jobs"
                 className="text-sm text-gray-400 hover:text-white"
               >
