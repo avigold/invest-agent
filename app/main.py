@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
 from app.api.routes_countries import router as countries_router
+from app.api.routes_industries import router as industries_router
 from app.api.routes_jobs import init_job_globals, router as jobs_router
 from app.api.stripe_routes import router as stripe_router
 from app.config import get_settings
@@ -67,6 +68,7 @@ def create_app() -> FastAPI:
     app.include_router(jobs_router)
     app.include_router(stripe_router)
     app.include_router(countries_router)
+    app.include_router(industries_router)
 
     return app
 

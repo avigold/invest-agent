@@ -1,0 +1,407 @@
+{
+  "rubric_version": "1.0",
+  "description": "Macro sensitivity rubric for 11 GICS sectors. For each sector, defines which macro indicators are relevant and whether the sector benefits (+1) or is hurt (-1) when the indicator is above the threshold.",
+  "scoring_method": "For each sector, sum the signals across its relevant indicators. Each indicator contributes +1 if the condition is favorable (indicator above threshold and direction is 'high_favorable', or below threshold and direction is 'low_favorable') and -1 otherwise. The raw score range is [-N, +N] where N is the number of indicators for that sector.",
+  "thresholds": {
+    "gdp_growth_pct": {
+      "threshold": 3.0,
+      "unit": "percent",
+      "comparison": "above_threshold_is_high"
+    },
+    "inflation_pct": {
+      "threshold": 4.0,
+      "unit": "percent",
+      "comparison": "above_threshold_is_high"
+    },
+    "unemployment_pct": {
+      "threshold": 6.0,
+      "unit": "percent",
+      "comparison": "above_threshold_is_high"
+    },
+    "govt_debt_gdp_pct": {
+      "threshold": 60.0,
+      "unit": "percent",
+      "comparison": "above_threshold_is_high"
+    },
+    "current_account_gdp_pct": {
+      "threshold": 0.0,
+      "unit": "percent",
+      "comparison": "above_threshold_is_high"
+    },
+    "fdi_gdp_pct": {
+      "threshold": 2.0,
+      "unit": "percent",
+      "comparison": "above_threshold_is_high"
+    },
+    "central_bank_rate_pct": {
+      "threshold": 4.0,
+      "unit": "percent",
+      "comparison": "above_threshold_is_high"
+    },
+    "hy_credit_spread_bps": {
+      "threshold": 400,
+      "unit": "bps",
+      "comparison": "above_threshold_is_high"
+    },
+    "yield_curve_10y2y_bps": {
+      "threshold": 50,
+      "unit": "bps",
+      "comparison": "above_threshold_is_high"
+    },
+    "stability_index": {
+      "threshold": 0.5,
+      "unit": "index_0_to_1",
+      "comparison": "above_threshold_is_high"
+    }
+  },
+  "sectors": {
+    "energy": {
+      "gics_code": "10",
+      "label": "Energy",
+      "sensitivities": [
+        {
+          "indicator": "gdp_growth_pct",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Energy demand is pro-cyclical; strong GDP growth drives higher consumption of oil, gas, and refined products."
+        },
+        {
+          "indicator": "inflation_pct",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Energy companies are natural inflation beneficiaries because commodity prices are a primary driver of headline inflation; rising prices flow directly to revenue."
+        },
+        {
+          "indicator": "current_account_gdp_pct",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "A current account surplus often signals a net energy/commodity exporter, which creates a supportive macro environment for domestic energy firms (favorable FX, reinvestment flows)."
+        },
+        {
+          "indicator": "stability_index",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Energy projects require long-horizon capital commitments; political instability raises expropriation and contract risk, deterring investment and compressing valuations."
+        }
+      ]
+    },
+    "materials": {
+      "gics_code": "15",
+      "label": "Materials",
+      "sensitivities": [
+        {
+          "indicator": "gdp_growth_pct",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Materials demand (metals, chemicals, construction inputs) is strongly tied to industrial and construction activity, which tracks GDP."
+        },
+        {
+          "indicator": "inflation_pct",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Like energy, materials companies benefit from rising commodity prices that drive inflation; they are price-makers in inflationary environments."
+        },
+        {
+          "indicator": "fdi_gdp_pct",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "High FDI inflows signal capital formation and infrastructure build-out, which directly increases demand for raw materials."
+        },
+        {
+          "indicator": "unemployment_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Low unemployment signals tight labor markets and strong economic activity, both of which support industrial materials demand."
+        }
+      ]
+    },
+    "industrials": {
+      "gics_code": "20",
+      "label": "Industrials",
+      "sensitivities": [
+        {
+          "indicator": "gdp_growth_pct",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Industrials (capital goods, transportation, construction) are the textbook cyclical sector; revenue is directly tied to economic expansion."
+        },
+        {
+          "indicator": "unemployment_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Low unemployment reflects strong labor demand, which correlates with high capacity utilization and capital spending -- both direct drivers of industrial revenue."
+        },
+        {
+          "indicator": "hy_credit_spread_bps",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Industrials are capital-intensive and rely on debt financing for equipment and projects; tight credit spreads reduce funding costs and support order flow."
+        },
+        {
+          "indicator": "yield_curve_10y2y_bps",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "A steep yield curve signals expected economic expansion and accommodative near-term monetary policy, both favorable for capex-dependent industrials."
+        },
+        {
+          "indicator": "fdi_gdp_pct",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Foreign direct investment flows into manufacturing, logistics, and infrastructure, directly benefiting industrial firms."
+        }
+      ]
+    },
+    "consumer_discretionary": {
+      "gics_code": "25",
+      "label": "Consumer Discretionary",
+      "sensitivities": [
+        {
+          "indicator": "gdp_growth_pct",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Discretionary spending (autos, retail, travel) is the most income-elastic consumer category; it expands sharply in booms and contracts in downturns."
+        },
+        {
+          "indicator": "unemployment_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Employment is the primary determinant of consumer confidence and disposable income; low unemployment supports discretionary purchases."
+        },
+        {
+          "indicator": "inflation_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "High inflation erodes real purchasing power and compresses discretionary margins (input costs rise faster than firms can reprice non-essential goods)."
+        },
+        {
+          "indicator": "central_bank_rate_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Many discretionary purchases (autos, housing-adjacent goods) are credit-financed; lower rates reduce consumer borrowing costs and support demand."
+        },
+        {
+          "indicator": "hy_credit_spread_bps",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Many discretionary retailers and auto companies are sub-investment-grade borrowers; wide spreads raise their cost of capital and signal risk-off sentiment."
+        }
+      ]
+    },
+    "consumer_staples": {
+      "gics_code": "30",
+      "label": "Consumer Staples",
+      "sensitivities": [
+        {
+          "indicator": "inflation_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "While staples have pricing power, extreme inflation compresses margins in the short term (input cost lags) and can trigger government price controls in emerging markets."
+        },
+        {
+          "indicator": "stability_index",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Staples companies need functioning distribution networks and consumer access; instability disrupts supply chains and reduces store traffic."
+        },
+        {
+          "indicator": "central_bank_rate_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Staples are bond proxies (stable dividends, low growth); high rates make bonds more attractive on a relative yield basis, compressing staples valuations."
+        }
+      ]
+    },
+    "health_care": {
+      "gics_code": "35",
+      "label": "Health Care",
+      "sensitivities": [
+        {
+          "indicator": "govt_debt_gdp_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Government is the dominant payer in most health systems; high debt burdens lead to austerity, price regulation, and delayed procurement -- all negative for health care revenues."
+        },
+        {
+          "indicator": "stability_index",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Health care investment (hospitals, clinical trials, regulatory approvals) requires institutional stability; instability deters pharma entry and disrupts reimbursement systems."
+        },
+        {
+          "indicator": "central_bank_rate_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Biotech and med-tech are long-duration growth assets whose valuations are highly sensitive to discount rates; lower rates support higher present values of future cash flows."
+        },
+        {
+          "indicator": "gdp_growth_pct",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "While health care is defensive, GDP growth expands the tax base and supports government health budgets, enabling faster adoption of new treatments and devices."
+        }
+      ]
+    },
+    "financials": {
+      "gics_code": "40",
+      "label": "Financials",
+      "sensitivities": [
+        {
+          "indicator": "yield_curve_10y2y_bps",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Banks earn net interest margin by borrowing short and lending long; a steep curve directly widens this margin. This is the single most important macro signal for bank profitability."
+        },
+        {
+          "indicator": "gdp_growth_pct",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Loan growth, fee income, and asset quality all improve with economic expansion; recessions trigger credit losses that overwhelm margin benefits."
+        },
+        {
+          "indicator": "unemployment_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Unemployment is the strongest predictor of consumer loan defaults; low unemployment keeps credit quality high and provisions low."
+        },
+        {
+          "indicator": "hy_credit_spread_bps",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Wide credit spreads signal systemic credit stress, which impairs bank loan books, reduces capital markets revenue, and tightens interbank liquidity."
+        },
+        {
+          "indicator": "stability_index",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Financial systems depend on institutional trust, rule of law, and contract enforcement; instability triggers capital flight and bank runs."
+        }
+      ]
+    },
+    "information_technology": {
+      "gics_code": "45",
+      "label": "Information Technology",
+      "sensitivities": [
+        {
+          "indicator": "gdp_growth_pct",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Enterprise IT spending is pro-cyclical; companies invest in technology during expansions and cut capex in downturns."
+        },
+        {
+          "indicator": "central_bank_rate_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Technology stocks are long-duration growth equities; lower discount rates mechanically increase the present value of distant future earnings, supporting valuations."
+        },
+        {
+          "indicator": "fdi_gdp_pct",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Tech sectors in emerging and mid-income countries depend heavily on foreign capital for growth; high FDI signals an attractive investment environment for technology firms."
+        },
+        {
+          "indicator": "stability_index",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "IP-intensive technology businesses require rule of law, patent enforcement, and regulatory predictability; instability deters investment and talent."
+        }
+      ]
+    },
+    "communication_services": {
+      "gics_code": "50",
+      "label": "Communication Services",
+      "sensitivities": [
+        {
+          "indicator": "gdp_growth_pct",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Advertising revenue (a major component for media and interactive companies) is strongly pro-cyclical; telecom subscriber growth also tracks economic expansion."
+        },
+        {
+          "indicator": "central_bank_rate_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Telecom companies carry significant debt for network buildouts; media/interactive companies are growth stocks with rate-sensitive valuations."
+        },
+        {
+          "indicator": "unemployment_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Consumer spending on subscriptions, streaming, and mobile services is supported by employment and income growth."
+        },
+        {
+          "indicator": "stability_index",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Communication infrastructure requires large fixed investments and regulatory licenses; instability raises the risk of expropriation, censorship mandates, or license revocation."
+        }
+      ]
+    },
+    "utilities": {
+      "gics_code": "55",
+      "label": "Utilities",
+      "sensitivities": [
+        {
+          "indicator": "central_bank_rate_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Utilities are the classic bond proxy: high dividend yield, regulated returns, heavy leverage. Rising rates increase their cost of debt and make their yields less competitive versus risk-free alternatives."
+        },
+        {
+          "indicator": "inflation_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Regulated utilities often face price caps or regulatory lag that prevents passing through cost increases in real-time; high inflation compresses real returns."
+        },
+        {
+          "indicator": "govt_debt_gdp_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Highly indebted governments may impose windfall taxes, delay rate approvals, or force utilities to absorb subsidy burdens, impairing returns."
+        },
+        {
+          "indicator": "stability_index",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Utilities operate under long-term concessions and regulated tariff structures; political instability threatens contract sanctity and regulatory frameworks."
+        }
+      ]
+    },
+    "real_estate": {
+      "gics_code": "60",
+      "label": "Real Estate",
+      "sensitivities": [
+        {
+          "indicator": "central_bank_rate_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Real estate is the most rate-sensitive sector: REITs use significant leverage, property values are discounted cash flow models, and mortgage rates directly affect demand. This is the dominant signal."
+        },
+        {
+          "indicator": "gdp_growth_pct",
+          "favorable_when": "high",
+          "weight": 1,
+          "rationale": "Economic growth drives office and retail leasing demand, residential absorption, and rental rate growth."
+        },
+        {
+          "indicator": "unemployment_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Employment growth drives housing formation (new households) and office space absorption; high unemployment leads to vacancy and rent concessions."
+        },
+        {
+          "indicator": "hy_credit_spread_bps",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "Real estate developers and REITs are heavy borrowers; wide spreads increase refinancing risk and reduce transaction volume (buyers and sellers cannot agree on cap rates)."
+        },
+        {
+          "indicator": "inflation_pct",
+          "favorable_when": "low",
+          "weight": 1,
+          "rationale": "While real estate is sometimes called an inflation hedge, high inflation triggers rate hikes that dominate; in practice, real estate underperforms during inflationary tightening cycles."
+        }
+      ]
+    }
+  }
+}

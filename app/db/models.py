@@ -208,6 +208,57 @@ class CountryRiskRegister(Base):
     country: Mapped[Country] = relationship(back_populates="risks")
 
 
+class Industry(Base):
+    __tablename__ = "industries"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    gics_code: Mapped[str] = mapped_column(String(3), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    scores: Mapped[list[IndustryScore]] = relationship(back_populates="industry")
+    risks: Mapped[list[IndustryRiskRegister]] = relationship(back_populates="industry")
+
+
+class IndustryScore(Base):
+    __tablename__ = "industry_scores"
+    __table_args__ = (
+        UniqueConstraint("industry_id", "country_id", "as_of", "calc_version", name="uq_industry_score_version"),
+        Index("ix_industry_scores_as_of", "as_of"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    industry_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("industries.id", ondelete="CASCADE"), nullable=False)
+    country_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("countries.id", ondelete="CASCADE"), nullable=False)
+    as_of: Mapped[date_type] = mapped_column(Date, nullable=False)
+    calc_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    rubric_score: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
+    overall_score: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
+    component_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    point_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    industry: Mapped[Industry] = relationship(back_populates="scores")
+    country: Mapped[Country] = relationship()
+
+
+class IndustryRiskRegister(Base):
+    __tablename__ = "industry_risk_register"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    industry_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("industries.id", ondelete="CASCADE"), nullable=False)
+    country_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("countries.id", ondelete="CASCADE"), nullable=False)
+    risk_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    detected_at: Mapped[date_type] = mapped_column(Date, nullable=False)
+    resolved_at: Mapped[date_type | None] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    industry: Mapped[Industry] = relationship(back_populates="risks")
+    country: Mapped[Country] = relationship()
+
+
 class DecisionPacket(Base):
     __tablename__ = "decision_packets"
     __table_args__ = (

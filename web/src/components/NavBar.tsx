@@ -28,6 +28,12 @@ export default function NavBar() {
                 Countries
               </Link>
               <Link
+                href="/industries"
+                className="text-sm text-gray-400 hover:text-white"
+              >
+                Industries
+              </Link>
+              <Link
                 href="/jobs"
                 className="text-sm text-gray-400 hover:text-white"
               >
