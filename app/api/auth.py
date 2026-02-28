@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi.responses import RedirectResponse
 from jose import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -133,9 +134,10 @@ async def google_callback(
     await db.commit()
     await db.refresh(user)
 
-    # Issue JWT as httpOnly cookie
+    # Issue JWT as httpOnly cookie and redirect to dashboard
     token = _create_jwt(str(user.id))
-    response.set_cookie(
+    redirect = RedirectResponse(url=f"{settings.app_url}/dashboard", status_code=302)
+    redirect.set_cookie(
         key="access_token",
         value=token,
         httponly=True,
@@ -143,14 +145,7 @@ async def google_callback(
         max_age=settings.jwt_expiry_hours * 3600,
         path="/",
     )
-
-    return {
-        "id": str(user.id),
-        "email": user.email,
-        "name": user.name,
-        "plan": user.plan,
-        "role": user.role,
-    }
+    return redirect
 
 
 @router.post("/logout")
