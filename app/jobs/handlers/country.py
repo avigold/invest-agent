@@ -205,7 +205,7 @@ async def country_refresh_handler(
         _log(job, "\n--- Risk Detection ---")
         all_risks: dict[str, list[CountryRiskRegister]] = {}
         for score in scores:
-            country = next(c for c in all_countries if c.id == score.country_id)
+            country = next(c for c in countries if c.id == score.country_id)
             # Clear old risks for this country + date
             await db.execute(
                 delete(CountryRiskRegister).where(
@@ -224,7 +224,7 @@ async def country_refresh_handler(
         _log(job, "\n--- Building Decision Packets ---")
         packet_ids: list[str] = []
         for score in scores:
-            country = next(c for c in all_countries if c.id == score.country_id)
+            country = next(c for c in countries if c.id == score.country_id)
             risks = all_risks.get(country.iso2, [])
             packet = await build_country_packet(
                 db=db,

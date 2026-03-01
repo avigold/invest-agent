@@ -168,7 +168,7 @@ async def company_refresh_handler(
         _log(job, "\n--- Risk Detection ---")
         all_risks: dict[str, list[CompanyRiskRegister]] = {}
         for score in scores:
-            company = next(c for c in all_companies if c.id == score.company_id)
+            company = next(c for c in companies if c.id == score.company_id)
             await db.execute(
                 delete(CompanyRiskRegister).where(
                     CompanyRiskRegister.company_id == company.id,
@@ -188,7 +188,7 @@ async def company_refresh_handler(
         _log(job, "\n--- Building Decision Packets ---")
         packet_ids: list[str] = []
         for score in scores:
-            company = next(c for c in all_companies if c.id == score.company_id)
+            company = next(c for c in companies if c.id == score.company_id)
             risks = all_risks.get(company.ticker, [])
             packet = await build_company_packet(
                 db=db,
