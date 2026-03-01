@@ -26,6 +26,18 @@ export default function NavBar() {
                 Countries
               </Link>
               <Link
+                to="/recommendations"
+                className="text-sm text-gray-400 hover:text-white"
+              >
+                Recommendations
+              </Link>
+              <Link
+                to="/companies"
+                className="text-sm text-gray-400 hover:text-white"
+              >
+                Companies
+              </Link>
+              <Link
                 to="/industries"
                 className="text-sm text-gray-400 hover:text-white"
               >

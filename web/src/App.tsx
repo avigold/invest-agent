@@ -7,8 +7,11 @@ const Login = lazy(() => import("@/pages/Login"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Countries = lazy(() => import("@/pages/Countries"));
 const CountryDetail = lazy(() => import("@/pages/CountryDetail"));
+const Companies = lazy(() => import("@/pages/Companies"));
+const CompanyDetail = lazy(() => import("@/pages/CompanyDetail"));
 const Industries = lazy(() => import("@/pages/Industries"));
 const IndustryDetail = lazy(() => import("@/pages/IndustryDetail"));
+const Recommendations = lazy(() => import("@/pages/Recommendations"));
 const Jobs = lazy(() => import("@/pages/Jobs"));
 const JobDetail = lazy(() => import("@/pages/JobDetail"));
 
@@ -24,6 +27,9 @@ export default function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/countries" element={<Countries />} />
             <Route path="/countries/:iso2" element={<CountryDetail />} />
+            <Route path="/recommendations" element={<Recommendations />} />
+            <Route path="/companies" element={<Companies />} />
+            <Route path="/companies/:ticker" element={<CompanyDetail />} />
             <Route path="/industries" element={<Industries />} />
             <Route path="/industries/:gics_code" element={<IndustryDetail />} />
             <Route path="/jobs" element={<Jobs />} />

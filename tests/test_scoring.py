@@ -127,6 +127,18 @@ class TestMacroSubscores:
         for iso, s in scores.items():
             assert 0 <= s <= 100, f"{iso} score {s} out of range"
 
+    def test_universe_independence(self):
+        """Scoring one country gives the same result regardless of universe size."""
+        us_alone = {"US": {"gdp_growth": 3.0, "inflation": 2.0, "unemployment": 4.0, "govt_debt_gdp": 120.0, "current_account_gdp": -3.0, "fdi_gdp": 1.5, "reserves": 50.0}}
+        us_with_others = {
+            "US": {"gdp_growth": 3.0, "inflation": 2.0, "unemployment": 4.0, "govt_debt_gdp": 120.0, "current_account_gdp": -3.0, "fdi_gdp": 1.5, "reserves": 50.0},
+            "GB": {"gdp_growth": 1.0, "inflation": 5.0, "unemployment": 5.0, "govt_debt_gdp": 100.0, "current_account_gdp": -4.0, "fdi_gdp": 2.0, "reserves": 40.0},
+        }
+
+        score_alone = _compute_macro_subscores(us_alone)
+        score_with = _compute_macro_subscores(us_with_others)
+        assert score_alone["US"] == pytest.approx(score_with["US"])
+
     def test_determinism(self):
         """Same inputs must produce same outputs."""
         macro_data = {
@@ -158,6 +170,15 @@ class TestMarketSubscores:
         assert len(scores) == 3
         # US should score highest (best return, no drawdown)
         assert scores["US"] > scores["JP"]
+
+    def test_universe_independence(self):
+        """Scoring one country gives the same result regardless of universe size."""
+        us_prices = self._make_prices([100.0] * 251 + [120.0])
+        gb_prices = self._make_prices([100.0] * 251 + [90.0])
+
+        score_alone = _compute_market_subscores({"US": us_prices})
+        score_with = _compute_market_subscores({"US": us_prices, "GB": gb_prices})
+        assert score_alone["US"] == pytest.approx(score_with["US"])
 
     def test_empty_prices(self):
         scores = _compute_market_subscores({})

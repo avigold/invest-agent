@@ -16,10 +16,13 @@ from app.db.models import (
     CountrySeries,
     CountrySeriesPoint,
 )
+from app.score.absolute import absolute_score
 from app.score.versions import (
     COUNTRY_CALC_VERSION,
     COUNTRY_WEIGHTS,
+    MACRO_ABSOLUTE_THRESHOLDS,
     MACRO_INDICATORS,
+    MARKET_ABSOLUTE_THRESHOLDS,
 )
 
 
@@ -235,48 +238,52 @@ async def _load_point_ids_for_country(
 def _compute_macro_subscores(
     macro_data: dict[str, dict[str, float | None]],
 ) -> dict[str, float]:
-    """Given {iso2: {indicator: value}}, return {iso2: macro_score_0_to_100}."""
+    """Given {iso2: {indicator: value}}, return {iso2: macro_score_0_to_100}.
+
+    Each indicator is scored independently via absolute_score() then averaged.
+    Universe-independent: scoring 1 country gives the same result as scoring 10.
+    """
     iso_codes = list(macro_data.keys())
     if not iso_codes:
         return {}
 
-    # For each indicator, collect values and rank
-    indicator_ranks: dict[str, dict[str, float]] = {}  # indicator -> {iso2: rank}
-
-    for indicator, higher_is_better in MACRO_INDICATORS.items():
-        values = [macro_data[iso].get(indicator) for iso in iso_codes]
-        ranks = percentile_rank(values, higher_is_better=higher_is_better)
-        indicator_ranks[indicator] = dict(zip(iso_codes, ranks))
-
-    # Average across indicators for each country
     scores: dict[str, float] = {}
     for iso in iso_codes:
-        ranks = [indicator_ranks[ind][iso] for ind in MACRO_INDICATORS]
-        scores[iso] = (sum(ranks) / len(ranks)) * 100
+        indicator_scores: list[float] = []
+        for indicator in MACRO_INDICATORS:
+            value = macro_data[iso].get(indicator)
+            th = MACRO_ABSOLUTE_THRESHOLDS[indicator]
+            s = absolute_score(value, th["floor"], th["ceiling"], th["higher_is_better"])
+            indicator_scores.append(s)
+        scores[iso] = sum(indicator_scores) / len(indicator_scores)
     return scores
 
 
 def _compute_market_subscores(
     prices_data: dict[str, list[dict]],
 ) -> dict[str, float]:
-    """Given {iso2: [{date, close}]}, compute market sub-scores."""
+    """Given {iso2: [{date, close}]}, compute market sub-scores.
+
+    Each metric is scored via absolute_score() then averaged.
+    """
     iso_codes = list(prices_data.keys())
     if not iso_codes:
         return {}
 
-    returns = [compute_1y_return(prices_data[iso]) for iso in iso_codes]
-    drawdowns = [compute_max_drawdown(prices_data[iso]) for iso in iso_codes]
-    ma_spreads = [compute_ma_spread(prices_data[iso]) for iso in iso_codes]
-
-    return_ranks = percentile_rank(returns, higher_is_better=True)
-    # For drawdowns: less negative is better, so higher_is_better=True
-    drawdown_ranks = percentile_rank(drawdowns, higher_is_better=True)
-    ma_ranks = percentile_rank(ma_spreads, higher_is_better=True)
-
     scores: dict[str, float] = {}
-    for i, iso in enumerate(iso_codes):
-        avg = (return_ranks[i] + drawdown_ranks[i] + ma_ranks[i]) / 3
-        scores[iso] = avg * 100
+    for iso in iso_codes:
+        prices = prices_data[iso]
+        metrics = {
+            "return_1y": compute_1y_return(prices),
+            "max_drawdown": compute_max_drawdown(prices),
+            "ma_spread": compute_ma_spread(prices),
+        }
+        metric_scores: list[float] = []
+        for name, value in metrics.items():
+            th = MARKET_ABSOLUTE_THRESHOLDS[name]
+            s = absolute_score(value, th["floor"], th["ceiling"], th["higher_is_better"])
+            metric_scores.append(s)
+        scores[iso] = sum(metric_scores) / len(metric_scores)
 
     return scores
 
@@ -287,9 +294,9 @@ async def compute_country_scores(
     as_of: date,
     log_fn: Callable[[str], None],
 ) -> list[CountryScore]:
-    """Compute scores for all countries.
+    """Compute scores for the given countries.
 
-    Must be called with all countries at once for percentile ranking.
+    Uses absolute scoring — each country is scored independently.
     """
     log_fn(f"Loading macro data for {len(countries)} countries...")
     macro_data = await _load_latest_macro_values(db, countries)

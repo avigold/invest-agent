@@ -18,7 +18,6 @@ from app.db.models import (
     IndustryRiskRegister,
     IndustryScore,
 )
-from app.score.country import percentile_rank
 from app.score.versions import INDUSTRY_CALC_VERSION
 
 _RUBRIC_PATH = Path(__file__).resolve().parents[2] / "config" / "sector_macro_sensitivity_v1.json"
@@ -167,7 +166,9 @@ async def compute_industry_scores(
 ) -> list[IndustryScore]:
     """Compute rubric-based scores for all industry×country combinations.
 
-    All 110 combinations are percentile-ranked together.
+    Uses linear rescale: overall = ((raw_score + N) / (2 * N)) * 100
+    where N = max_possible (number of indicators for that sector).
+    Universe-independent — each combination scored on its own merits.
     """
     rubric = load_rubric()
 
@@ -184,61 +185,57 @@ async def compute_industry_scores(
 
     # Evaluate rubric for each country × sector
     log_fn("Evaluating rubric for all country × sector combinations...")
-    # Collect all (sector_key, iso2, raw_score, component) tuples
-    all_combos: list[tuple[str, str, int, dict]] = []
+    scores: list[IndustryScore] = []
 
     for country in countries:
         macro = country_macro[country.iso2]
         evaluation = evaluate_rubric(rubric, macro)
 
         for sector_key, result in evaluation.items():
-            all_combos.append((sector_key, country.iso2, result["raw_score"], result))
+            sector_cfg = rubric["sectors"][sector_key]
+            gics_code = sector_cfg["gics_code"]
+            industry = industry_by_gics.get(gics_code)
 
-    # Percentile-rank all raw scores together (higher raw = more favorable = higher rank)
-    raw_scores = [float(combo[2]) for combo in all_combos]
-    ranks = percentile_rank(raw_scores, higher_is_better=True)
+            if industry is None:
+                continue
 
-    # Build IndustryScore objects
-    log_fn(f"Building {len(all_combos)} industry scores...")
-    scores: list[IndustryScore] = []
+            raw_score = result["raw_score"]
+            n = result["max_possible"]
 
-    for i, (sector_key, iso2, raw_score, component) in enumerate(all_combos):
-        sector_cfg = rubric["sectors"][sector_key]
-        gics_code = sector_cfg["gics_code"]
-        industry = industry_by_gics.get(gics_code)
-        country = country_by_iso[iso2]
+            # Linear rescale: all unfavorable (-N) → 0, neutral (0) → 50,
+            # all favorable (+N) → 100
+            if n > 0:
+                overall = round(((raw_score + n) / (2 * n)) * 100, 2)
+            else:
+                overall = 50.0
 
-        if industry is None:
-            continue
+            # Get point IDs for evidence tracking
+            indicator_names = [s["indicator"] for s in result["signals"]]
+            point_ids = await load_point_ids_for_indicators(db, country, indicator_names)
 
-        overall = round(ranks[i] * 100, 2)
+            # Enrich component_data with country macro summary
+            macro_summary = {
+                _INDICATOR_TO_SERIES[k]: v
+                for k, v in country_macro[country.iso2].items()
+                if v is not None
+            }
+            result["country_macro_summary"] = macro_summary
 
-        # Get point IDs for evidence tracking
-        indicator_names = [s["indicator"] for s in component["signals"]]
-        point_ids = await load_point_ids_for_indicators(db, country, indicator_names)
+            score = IndustryScore(
+                industry_id=industry.id,
+                country_id=country.id,
+                as_of=as_of,
+                calc_version=INDUSTRY_CALC_VERSION,
+                rubric_score=Decimal(str(raw_score)),
+                overall_score=Decimal(str(overall)),
+                component_data=result,
+                point_ids=point_ids,
+            )
+            scores.append(score)
 
-        # Enrich component_data with country macro summary
-        macro_summary = {
-            _INDICATOR_TO_SERIES[k]: v
-            for k, v in country_macro[iso2].items()
-            if v is not None
-        }
-        component["country_macro_summary"] = macro_summary
+            log_fn(f"  {sector_cfg['label']} × {country.iso2}: raw={raw_score}, overall={overall:.1f}")
 
-        score = IndustryScore(
-            industry_id=industry.id,
-            country_id=country.id,
-            as_of=as_of,
-            calc_version=INDUSTRY_CALC_VERSION,
-            rubric_score=Decimal(str(raw_score)),
-            overall_score=Decimal(str(overall)),
-            component_data=component,
-            point_ids=point_ids,
-        )
-        scores.append(score)
-
-        log_fn(f"  {sector_cfg['label']} × {iso2}: raw={raw_score}, overall={overall:.1f}")
-
+    log_fn(f"Built {len(scores)} industry scores.")
     return scores
 
 

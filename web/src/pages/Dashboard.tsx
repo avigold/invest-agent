@@ -11,6 +11,24 @@ interface CountryPreview {
   rank: number;
 }
 
+interface CompanyPreview {
+  ticker: string;
+  name: string;
+  gics_code: string;
+  overall_score: number;
+  fundamental_score: number;
+  rank: number;
+}
+
+interface BuyRecommendation {
+  ticker: string;
+  name: string;
+  country_iso2: string;
+  composite_score: number;
+  classification: string;
+  rank: number;
+}
+
 interface IndustryPreview {
   gics_code: string;
   industry_name: string;
@@ -26,7 +44,9 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [recentJobs, setRecentJobs] = useState<JobRow[]>([]);
   const [topCountries, setTopCountries] = useState<CountryPreview[]>([]);
+  const [topCompanies, setTopCompanies] = useState<CompanyPreview[]>([]);
   const [topIndustries, setTopIndustries] = useState<IndustryPreview[]>([]);
+  const [topBuys, setTopBuys] = useState<BuyRecommendation[]>([]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -42,8 +62,14 @@ export default function Dashboard() {
       apiJson<CountryPreview[]>("/v1/countries")
         .then((c) => setTopCountries(c.slice(0, 3)))
         .catch(() => {});
+      apiJson<CompanyPreview[]>("/v1/companies")
+        .then((c) => setTopCompanies(c.slice(0, 5)))
+        .catch(() => {});
       apiJson<IndustryPreview[]>("/v1/industries")
         .then((ind) => setTopIndustries(ind.slice(0, 5)))
+        .catch(() => {});
+      apiJson<BuyRecommendation[]>("/v1/recommendations?classification=Buy")
+        .then((recs) => setTopBuys(recs.slice(0, 5)))
         .catch(() => {});
     }
   }, [user]);
@@ -83,6 +109,102 @@ export default function Dashboard() {
                 </div>
               </Link>
             ))}
+          </div>
+        </div>
+      )}
+
+      {topBuys.length > 0 && (
+        <div className="mb-8">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Top Buy Recommendations</h2>
+            <Link to="/recommendations" className="text-sm text-brand hover:underline">
+              View all
+            </Link>
+          </div>
+          <div className="rounded-lg border border-gray-800 bg-gray-900">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-800 text-left text-xs uppercase text-gray-500">
+                  <th className="px-4 py-2 w-12">#</th>
+                  <th className="px-4 py-2">Company</th>
+                  <th className="px-4 py-2">Country</th>
+                  <th className="px-4 py-2 text-right">Composite</th>
+                  <th className="px-4 py-2 text-center">Signal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topBuys.map((r) => (
+                  <tr
+                    key={r.ticker}
+                    className="border-b border-gray-800/50 hover:bg-gray-800/30"
+                  >
+                    <td className="px-4 py-2 text-gray-500">{r.rank}</td>
+                    <td className="px-4 py-2">
+                      <Link
+                        to={`/companies/${r.ticker}`}
+                        className="text-white hover:text-brand"
+                      >
+                        {r.name}
+                      </Link>
+                      <span className="ml-2 text-xs text-gray-600">{r.ticker}</span>
+                    </td>
+                    <td className="px-4 py-2 text-gray-400">{r.country_iso2}</td>
+                    <td className="px-4 py-2 text-right font-mono font-bold text-green-400">
+                      {r.composite_score.toFixed(1)}
+                    </td>
+                    <td className="px-4 py-2 text-center">
+                      <span className="inline-block rounded-full border border-green-800 bg-green-900/50 px-3 py-0.5 text-xs font-bold text-green-400">
+                        Buy
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {topCompanies.length > 0 && (
+        <div className="mb-8">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Top Companies</h2>
+            <Link to="/companies" className="text-sm text-brand hover:underline">
+              View all
+            </Link>
+          </div>
+          <div className="rounded-lg border border-gray-800 bg-gray-900">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-800 text-left text-xs uppercase text-gray-500">
+                  <th className="px-4 py-2 w-12">#</th>
+                  <th className="px-4 py-2">Company</th>
+                  <th className="px-4 py-2 text-right">Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topCompanies.map((c) => (
+                  <tr
+                    key={c.ticker}
+                    className="border-b border-gray-800/50 hover:bg-gray-800/30"
+                  >
+                    <td className="px-4 py-2 text-gray-500">{c.rank}</td>
+                    <td className="px-4 py-2">
+                      <Link
+                        to={`/companies/${c.ticker}`}
+                        className="text-white hover:text-brand"
+                      >
+                        {c.name}
+                      </Link>
+                      <span className="ml-2 text-xs text-gray-600">{c.ticker}</span>
+                    </td>
+                    <td className="px-4 py-2 text-right font-mono font-bold text-green-400">
+                      {c.overall_score.toFixed(1)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

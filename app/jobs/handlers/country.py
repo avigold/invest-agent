@@ -180,18 +180,11 @@ async def country_refresh_handler(
 
             await db.commit()
 
-        # 4. Score all countries (need all for percentile ranking)
-        # If we're only refreshing one country, we still need all for ranking
-        if iso2_filter:
-            result = await db.execute(select(Country))
-            all_countries = list(result.scalars().all())
-        else:
-            all_countries = countries
-
+        # 4. Score countries (absolute scoring — no need to load all)
         _log(job, "\n--- Scoring ---")
         scores = await compute_country_scores(
             db=db,
-            countries=all_countries,
+            countries=countries,
             as_of=as_of,
             log_fn=lambda msg: _log(job, msg),
         )
