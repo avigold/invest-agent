@@ -114,9 +114,9 @@ class TestMarketMetrics:
 class TestMacroSubscores:
     def test_basic_scoring(self):
         macro_data = {
-            "US": {"gdp_growth": 3.0, "inflation": 2.0, "unemployment": 4.0, "govt_debt_gdp": 120.0, "current_account_gdp": -3.0, "fdi_gdp": 1.5, "reserves": 50.0},
-            "GB": {"gdp_growth": 1.0, "inflation": 5.0, "unemployment": 5.0, "govt_debt_gdp": 100.0, "current_account_gdp": -4.0, "fdi_gdp": 2.0, "reserves": 40.0},
-            "JP": {"gdp_growth": 2.0, "inflation": 1.0, "unemployment": 3.0, "govt_debt_gdp": 250.0, "current_account_gdp": 3.0, "fdi_gdp": 0.5, "reserves": 100.0},
+            "US": {"gdp_growth": 3.0, "inflation": 2.0, "unemployment": 4.0, "govt_debt_gdp": 120.0, "current_account_gdp": -3.0, "fdi_gdp": 1.5, "reserves": 50.0, "gdp_per_capita": 80000.0, "market_cap_gdp": 190.0, "household_consumption_pc": 39000.0},
+            "GB": {"gdp_growth": 1.0, "inflation": 5.0, "unemployment": 5.0, "govt_debt_gdp": 100.0, "current_account_gdp": -4.0, "fdi_gdp": 2.0, "reserves": 40.0, "gdp_per_capita": 46000.0, "market_cap_gdp": 100.0, "household_consumption_pc": 27000.0},
+            "JP": {"gdp_growth": 2.0, "inflation": 1.0, "unemployment": 3.0, "govt_debt_gdp": 250.0, "current_account_gdp": 3.0, "fdi_gdp": 0.5, "reserves": 100.0, "gdp_per_capita": 34000.0, "market_cap_gdp": 145.0, "household_consumption_pc": 20000.0},
         }
 
         scores = _compute_macro_subscores(macro_data)
@@ -129,10 +129,10 @@ class TestMacroSubscores:
 
     def test_universe_independence(self):
         """Scoring one country gives the same result regardless of universe size."""
-        us_alone = {"US": {"gdp_growth": 3.0, "inflation": 2.0, "unemployment": 4.0, "govt_debt_gdp": 120.0, "current_account_gdp": -3.0, "fdi_gdp": 1.5, "reserves": 50.0}}
+        us_alone = {"US": {"gdp_growth": 3.0, "inflation": 2.0, "unemployment": 4.0, "govt_debt_gdp": 120.0, "current_account_gdp": -3.0, "fdi_gdp": 1.5, "reserves": 50.0, "gdp_per_capita": 80000.0, "market_cap_gdp": 190.0, "household_consumption_pc": 39000.0}}
         us_with_others = {
-            "US": {"gdp_growth": 3.0, "inflation": 2.0, "unemployment": 4.0, "govt_debt_gdp": 120.0, "current_account_gdp": -3.0, "fdi_gdp": 1.5, "reserves": 50.0},
-            "GB": {"gdp_growth": 1.0, "inflation": 5.0, "unemployment": 5.0, "govt_debt_gdp": 100.0, "current_account_gdp": -4.0, "fdi_gdp": 2.0, "reserves": 40.0},
+            "US": {"gdp_growth": 3.0, "inflation": 2.0, "unemployment": 4.0, "govt_debt_gdp": 120.0, "current_account_gdp": -3.0, "fdi_gdp": 1.5, "reserves": 50.0, "gdp_per_capita": 80000.0, "market_cap_gdp": 190.0, "household_consumption_pc": 39000.0},
+            "GB": {"gdp_growth": 1.0, "inflation": 5.0, "unemployment": 5.0, "govt_debt_gdp": 100.0, "current_account_gdp": -4.0, "fdi_gdp": 2.0, "reserves": 40.0, "gdp_per_capita": 46000.0, "market_cap_gdp": 100.0, "household_consumption_pc": 27000.0},
         }
 
         score_alone = _compute_macro_subscores(us_alone)
@@ -142,8 +142,8 @@ class TestMacroSubscores:
     def test_determinism(self):
         """Same inputs must produce same outputs."""
         macro_data = {
-            "US": {"gdp_growth": 3.0, "inflation": 2.0, "unemployment": 4.0, "govt_debt_gdp": 120.0, "current_account_gdp": -3.0, "fdi_gdp": 1.5, "reserves": 50.0},
-            "GB": {"gdp_growth": 1.0, "inflation": 5.0, "unemployment": 5.0, "govt_debt_gdp": 100.0, "current_account_gdp": -4.0, "fdi_gdp": 2.0, "reserves": 40.0},
+            "US": {"gdp_growth": 3.0, "inflation": 2.0, "unemployment": 4.0, "govt_debt_gdp": 120.0, "current_account_gdp": -3.0, "fdi_gdp": 1.5, "reserves": 50.0, "gdp_per_capita": 80000.0, "market_cap_gdp": 190.0, "household_consumption_pc": 39000.0},
+            "GB": {"gdp_growth": 1.0, "inflation": 5.0, "unemployment": 5.0, "govt_debt_gdp": 100.0, "current_account_gdp": -4.0, "fdi_gdp": 2.0, "reserves": 40.0, "gdp_per_capita": 46000.0, "market_cap_gdp": 100.0, "household_consumption_pc": 27000.0},
         }
 
         scores1 = _compute_macro_subscores(macro_data)

@@ -80,3 +80,18 @@ class TestAbsoluteScore:
         assert absolute_score(0.05, -0.20, 0.30) == pytest.approx(50.0)
         assert absolute_score(-0.20, -0.20, 0.30) == pytest.approx(0.0)
         assert absolute_score(0.30, -0.20, 0.30) == pytest.approx(100.0)
+
+    def test_known_gdp_per_capita(self):
+        """US GDP per capita ~$80K with floor=5K, ceiling=100K → 78.9."""
+        score = absolute_score(80_000, 5_000, 100_000)
+        assert score == pytest.approx(78.95, abs=0.01)
+
+    def test_known_market_cap_gdp(self):
+        """US market cap/GDP ~190% with floor=20, ceiling=200 → 94.4."""
+        score = absolute_score(190.0, 20.0, 200.0)
+        assert score == pytest.approx(94.44, abs=0.01)
+
+    def test_known_household_consumption_pc(self):
+        """US household consumption ~$39K with floor=10K, ceiling=45K → 82.9."""
+        score = absolute_score(39_000, 10_000, 45_000)
+        assert score == pytest.approx(82.86, abs=0.01)

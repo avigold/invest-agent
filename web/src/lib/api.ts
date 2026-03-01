@@ -22,7 +22,12 @@ export async function apiJson<T = unknown>(
   const res = await apiFetch(path, options);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || `API error: ${res.status}`);
+    const detail = body.detail;
+    const msg =
+      typeof detail === "string"
+        ? detail
+        : detail?.error ?? `API error: ${res.status}`;
+    throw new Error(msg);
   }
   return res.json();
 }

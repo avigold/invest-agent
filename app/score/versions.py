@@ -51,6 +51,9 @@ MACRO_INDICATORS = {
     "current_account_gdp": True,
     "fdi_gdp": True,
     "reserves": True,
+    "gdp_per_capita": True,
+    "market_cap_gdp": True,
+    "household_consumption_pc": True,
 }
 
 # ---------------------------------------------------------------------------
@@ -67,6 +70,9 @@ MACRO_ABSOLUTE_THRESHOLDS: dict[str, dict] = {
     "current_account_gdp":{"floor": -8.0,  "ceiling": 10.0,  "higher_is_better": True},
     "fdi_gdp":            {"floor": -1.0,  "ceiling": 8.0,   "higher_is_better": True},
     "reserves":           {"floor": 0.0,   "ceiling": 500_000_000_000, "higher_is_better": True},  # USD (raw)
+    "gdp_per_capita":     {"floor": 5_000, "ceiling": 100_000, "higher_is_better": True},  # USD
+    "market_cap_gdp":     {"floor": 20.0,  "ceiling": 200.0,   "higher_is_better": True},  # percent of GDP
+    "household_consumption_pc": {"floor": 10_000, "ceiling": 45_000, "higher_is_better": True},  # constant 2015 USD
 }
 
 # Market metrics (shared by country and company)

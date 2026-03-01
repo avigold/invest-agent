@@ -79,7 +79,10 @@
     "unemployment": "SL.UEM.TOTL.ZS",
     "current_account_gdp": "BN.CAB.XOKA.GD.ZS",
     "fdi_gdp": "BX.KLT.DINV.WD.GD.ZS",
-    "reserves": "FI.RES.TOTL.CD"
+    "reserves": "FI.RES.TOTL.CD",
+    "gdp_per_capita": "NY.GDP.PCAP.CD",
+    "market_cap_gdp": "CM.MKT.LCAP.GD.ZS",
+    "household_consumption_pc": "NE.CON.PRVT.PC.KD"
   },
   "imf_indicators": {
     "govt_debt_gdp": "GGXWDG_NGDP"
