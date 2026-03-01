@@ -350,6 +350,24 @@ class CompanyRiskRegister(Base):
     company: Mapped[Company] = relationship(back_populates="risks")
 
 
+class ScoringProfile(Base):
+    __tablename__ = "scoring_profiles"
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_scoring_profile_user_name"),
+        Index("ix_scoring_profiles_user_id", "user_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow)
+
+    user: Mapped[User] = relationship()
+
+
 class RecommendationAnalysis(Base):
     __tablename__ = "recommendation_analyses"
     __table_args__ = (

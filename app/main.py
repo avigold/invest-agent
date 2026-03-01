@@ -14,6 +14,7 @@ from app.api.health import router as health_router
 from app.api.routes_companies import router as companies_router
 from app.api.routes_company_search import router as company_search_router
 from app.api.routes_recommendations import router as recommendations_router
+from app.api.routes_scoring_profiles import router as scoring_profiles_router
 from app.api.routes_countries import router as countries_router
 from app.api.routes_industries import router as industries_router
 from app.api.routes_jobs import init_job_globals, router as jobs_router
@@ -87,6 +88,7 @@ def create_app() -> FastAPI:
     app.include_router(companies_router)
     app.include_router(company_search_router)
     app.include_router(recommendations_router)
+    app.include_router(scoring_profiles_router)
 
     # Serve built frontend in production (when web/dist/ exists)
     dist_dir = Path(__file__).resolve().parent.parent / "web" / "dist"

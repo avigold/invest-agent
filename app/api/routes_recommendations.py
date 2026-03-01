@@ -17,9 +17,12 @@ from app.db.models import (
     Country,
     DecisionPacket,
     Industry,
+    ScoringProfile,
     User,
 )
 from app.db.session import get_db
+from app.score.profile_rescore import load_score_component_data, rescore_recommendations
+from app.score.profile_schema import ScoringProfileConfig
 from app.score.recommendations import compute_recommendations
 from app.score.versions import (
     COMPANY_SUMMARY_VERSION,
@@ -36,11 +39,19 @@ async def list_recommendations(
     classification: str | None = Query(None, description="Filter: Buy, Hold, or Sell"),
     country_iso2: str | None = Query(None, description="Filter by country ISO2 code"),
     gics_code: str | None = Query(None, description="Filter by GICS sector code"),
+    profile_id: uuid.UUID | None = Query(None, description="Scoring profile ID for custom rescoring"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Return composite recommendations for all companies, sorted by composite_score desc."""
     recommendations = await compute_recommendations(db)
+
+    # Resolve scoring profile
+    profile, profile_name = await _resolve_profile(db, user.id, profile_id)
+
+    if profile:
+        component_bundles = await load_score_component_data(db)
+        recommendations = rescore_recommendations(recommendations, component_bundles, profile)
 
     if classification:
         recommendations = [r for r in recommendations if r["classification"] == classification]
@@ -48,6 +59,12 @@ async def list_recommendations(
         recommendations = [r for r in recommendations if r["country_iso2"] == country_iso2]
     if gics_code:
         recommendations = [r for r in recommendations if r["gics_code"] == gics_code]
+
+    # Add profile metadata
+    for rec in recommendations:
+        rec["profile_id"] = str(profile_id) if profile_id else None
+        rec["profile_name"] = profile_name
+        rec["is_custom_profile"] = profile is not None
 
     return recommendations
 
@@ -150,3 +167,35 @@ async def _latest_packet(
         .limit(1)
     )
     return result.scalar_one_or_none()
+
+
+async def _resolve_profile(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    profile_id: uuid.UUID | None,
+) -> tuple[ScoringProfileConfig | None, str | None]:
+    """Resolve a scoring profile for the user.
+
+    Returns (config, name) or (None, None) if using system defaults.
+    """
+    if profile_id:
+        result = await db.execute(
+            select(ScoringProfile).where(ScoringProfile.id == profile_id)
+        )
+        profile = result.scalar_one_or_none()
+        if profile is None or profile.user_id != user_id:
+            return None, None
+        return ScoringProfileConfig(**profile.config), profile.name
+
+    # Check for user's default profile
+    result = await db.execute(
+        select(ScoringProfile).where(
+            ScoringProfile.user_id == user_id,
+            ScoringProfile.is_default == True,  # noqa: E712
+        )
+    )
+    profile = result.scalar_one_or_none()
+    if profile:
+        return ScoringProfileConfig(**profile.config), profile.name
+
+    return None, None
