@@ -41,13 +41,13 @@ Key traits:
 | Migrations | Alembic |
 | HTTP client | httpx |
 | Background jobs | In-process worker pool (MVP); Redis + RQ/Celery if needed |
-| Streaming logs | SSE endpoint per job |
+| Streaming logs | Polling-based log viewer (SSE was incompatible with Vite proxy) |
 | CLI | Typer |
 
 ### Frontend
 | Component | Choice |
 |-----------|--------|
-| Framework | Next.js (React) + TypeScript |
+| Framework | Vite + React Router + TypeScript (migrated from Next.js in M3) |
 | Styling | Tailwind CSS |
 | Theme | Dark mode (similar to mysecond.app) |
 | Charts | Recharts or D3 (TBD) |
@@ -348,9 +348,10 @@ Internal weights are not exposed to the user. The focus is on "here's your score
 ## 14. Open items
 
 - [ ] Charting library decision: Recharts vs D3 vs alternative
-- [ ] Session management: JWT vs httpOnly session cookie
-- [ ] Investable countries list (user to provide)
-- [ ] Exact Free tier monthly quotas
+- [x] Session management: **JWT httpOnly cookies** — resolved in PRD 2.0
+- [x] Investable countries list — resolved in PRD 2.0 (10 countries)
+- [ ] Exact Free tier monthly quotas (partially resolved: country_refresh = 5/month)
 - [ ] Pro tier pricing
 - [x] GDELT stability index transform specification — resolved in PRD 2.0 (DOC 2.0 API, theme-based instability volume)
 - [x] EOD market data provider selection — yfinance for MVP
+- [x] Frontend framework — migrated from Next.js to Vite + React Router in M3

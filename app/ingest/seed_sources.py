@@ -12,6 +12,7 @@ _SOURCES = [
     {"name": "yfinance", "base_url": "", "requires_auth": False},
     {"name": "gdelt", "base_url": "", "requires_auth": False},
     {"name": "imf", "base_url": "https://www.imf.org/external/datamapper/api/v1/", "requires_auth": False},
+    {"name": "sec_edgar", "base_url": "https://data.sec.gov/api/xbrl/", "requires_auth": False},
 ]
 
 

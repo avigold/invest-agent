@@ -1,0 +1,41 @@
+{
+  "version": "v1",
+  "companies": [
+    {"ticker": "AAPL", "cik": "0000320193", "name": "Apple Inc.", "gics_code": "45", "country_iso2": "US"},
+    {"ticker": "MSFT", "cik": "0000789019", "name": "Microsoft Corporation", "gics_code": "45", "country_iso2": "US"},
+    {"ticker": "AMZN", "cik": "0001018724", "name": "Amazon.com Inc.", "gics_code": "25", "country_iso2": "US"},
+    {"ticker": "GOOGL", "cik": "0001652044", "name": "Alphabet Inc.", "gics_code": "50", "country_iso2": "US"},
+    {"ticker": "META", "cik": "0001326801", "name": "Meta Platforms Inc.", "gics_code": "50", "country_iso2": "US"},
+    {"ticker": "NVDA", "cik": "0001045810", "name": "NVIDIA Corporation", "gics_code": "45", "country_iso2": "US"},
+    {"ticker": "TSLA", "cik": "0001318605", "name": "Tesla Inc.", "gics_code": "25", "country_iso2": "US"},
+    {"ticker": "JPM", "cik": "0000019617", "name": "JPMorgan Chase & Co.", "gics_code": "40", "country_iso2": "US"},
+    {"ticker": "JNJ", "cik": "0000200406", "name": "Johnson & Johnson", "gics_code": "35", "country_iso2": "US"},
+    {"ticker": "UNH", "cik": "0000731766", "name": "UnitedHealth Group Inc.", "gics_code": "35", "country_iso2": "US"},
+    {"ticker": "V", "cik": "0001403161", "name": "Visa Inc.", "gics_code": "40", "country_iso2": "US"},
+    {"ticker": "PG", "cik": "0000080424", "name": "Procter & Gamble Co.", "gics_code": "30", "country_iso2": "US"},
+    {"ticker": "XOM", "cik": "0000034088", "name": "Exxon Mobil Corporation", "gics_code": "10", "country_iso2": "US"},
+    {"ticker": "CVX", "cik": "0000093410", "name": "Chevron Corporation", "gics_code": "10", "country_iso2": "US"},
+    {"ticker": "HD", "cik": "0000354950", "name": "The Home Depot Inc.", "gics_code": "25", "country_iso2": "US"},
+    {"ticker": "KO", "cik": "0000021344", "name": "The Coca-Cola Company", "gics_code": "30", "country_iso2": "US"},
+    {"ticker": "PEP", "cik": "0000077476", "name": "PepsiCo Inc.", "gics_code": "30", "country_iso2": "US"},
+    {"ticker": "COST", "cik": "0000909832", "name": "Costco Wholesale Corporation", "gics_code": "30", "country_iso2": "US"},
+    {"ticker": "LLY", "cik": "0000059478", "name": "Eli Lilly and Company", "gics_code": "35", "country_iso2": "US"},
+    {"ticker": "MRK", "cik": "0000310158", "name": "Merck & Co. Inc.", "gics_code": "35", "country_iso2": "US"},
+    {"ticker": "ABBV", "cik": "0001551152", "name": "AbbVie Inc.", "gics_code": "35", "country_iso2": "US"},
+    {"ticker": "CRM", "cik": "0001108524", "name": "Salesforce Inc.", "gics_code": "45", "country_iso2": "US"},
+    {"ticker": "NEE", "cik": "0000753308", "name": "NextEra Energy Inc.", "gics_code": "55", "country_iso2": "US"},
+    {"ticker": "AMT", "cik": "0001053507", "name": "American Tower Corporation", "gics_code": "60", "country_iso2": "US"},
+    {"ticker": "CAT", "cik": "0000018230", "name": "Caterpillar Inc.", "gics_code": "20", "country_iso2": "US"}
+  ],
+  "edgar_concepts": {
+    "revenue": ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax"],
+    "net_income": ["NetIncomeLoss"],
+    "total_assets": ["Assets"],
+    "total_liabilities": ["Liabilities"],
+    "stockholders_equity": ["StockholdersEquity"],
+    "eps_diluted": ["EarningsPerShareDiluted"],
+    "operating_income": ["OperatingIncomeLoss"],
+    "cash_from_ops": ["NetCashProvidedByUsedInOperatingActivities"],
+    "capex": ["PaymentsToAcquirePropertyPlantAndEquipment"]
+  }
+}

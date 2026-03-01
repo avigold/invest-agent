@@ -259,6 +259,97 @@ class IndustryRiskRegister(Base):
     country: Mapped[Country] = relationship()
 
 
+class Company(Base):
+    __tablename__ = "companies"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    ticker: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    cik: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    gics_code: Mapped[str] = mapped_column(String(3), nullable=False, default="")
+    country_iso2: Mapped[str] = mapped_column(String(2), nullable=False, default="US")
+    config_version: Mapped[str] = mapped_column(String(50), nullable=False, default="v1")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    series: Mapped[list[CompanySeries]] = relationship(back_populates="company")
+    scores: Mapped[list[CompanyScore]] = relationship(back_populates="company")
+    risks: Mapped[list[CompanyRiskRegister]] = relationship(back_populates="company")
+
+
+class CompanySeries(Base):
+    __tablename__ = "company_series"
+    __table_args__ = (
+        UniqueConstraint("company_id", "series_name", name="uq_company_series_name"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False)
+    series_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    source: Mapped[str] = mapped_column(String(50), nullable=False)
+    indicator_code: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    unit: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    frequency: Mapped[str] = mapped_column(String(20), nullable=False, default="annual")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    company: Mapped[Company] = relationship(back_populates="series")
+    points: Mapped[list[CompanySeriesPoint]] = relationship(back_populates="series")
+
+
+class CompanySeriesPoint(Base):
+    __tablename__ = "company_series_points"
+    __table_args__ = (
+        UniqueConstraint("series_id", "date", name="uq_company_series_point_date"),
+        Index("ix_company_series_points_series_date", "series_id", "date"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    series_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("company_series.id", ondelete="CASCADE"), nullable=False)
+    artefact_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("artefacts.id"), nullable=False)
+    date: Mapped[date_type] = mapped_column(Date, nullable=False)
+    value: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    series: Mapped[CompanySeries] = relationship(back_populates="points")
+
+
+class CompanyScore(Base):
+    __tablename__ = "company_scores"
+    __table_args__ = (
+        UniqueConstraint("company_id", "as_of", "calc_version", name="uq_company_score_version"),
+        Index("ix_company_scores_as_of", "as_of"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False)
+    as_of: Mapped[date_type] = mapped_column(Date, nullable=False)
+    calc_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    fundamental_score: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
+    market_score: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
+    industry_context_score: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
+    overall_score: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
+    component_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    point_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    company: Mapped[Company] = relationship(back_populates="scores")
+
+
+class CompanyRiskRegister(Base):
+    __tablename__ = "company_risk_register"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False)
+    risk_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    detected_at: Mapped[date_type] = mapped_column(Date, nullable=False)
+    resolved_at: Mapped[date_type | None] = mapped_column(Date)
+    artefact_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("artefacts.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    company: Mapped[Company] = relationship(back_populates="risks")
+
+
 class DecisionPacket(Base):
     __tablename__ = "decision_packets"
     __table_args__ = (
