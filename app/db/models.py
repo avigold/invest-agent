@@ -350,6 +350,23 @@ class CompanyRiskRegister(Base):
     company: Mapped[Company] = relationship(back_populates="risks")
 
 
+class RecommendationAnalysis(Base):
+    __tablename__ = "recommendation_analyses"
+    __table_args__ = (
+        UniqueConstraint("ticker", "score_hash", "prompt_hash", name="uq_rec_analysis_ticker_hashes"),
+        Index("ix_rec_analysis_ticker", "ticker"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    ticker: Mapped[str] = mapped_column(String(20), nullable=False)
+    score_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    prompt_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    analysis_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    model_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    content: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+
 class DecisionPacket(Base):
     __tablename__ = "decision_packets"
     __table_args__ = (

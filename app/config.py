@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
 
     fred_api_key: str = ""
+    anthropic_api_key: str = ""
     artefact_storage_dir: str = "./data/artefacts"
 
     app_url: str = "http://localhost:3000"

@@ -143,7 +143,7 @@ export default function Dashboard() {
                     <td className="px-4 py-2 text-gray-500">{r.rank}</td>
                     <td className="px-4 py-2">
                       <Link
-                        to={`/companies/${r.ticker}`}
+                        to={`/recommendations/${r.ticker}`}
                         className="text-white hover:text-brand"
                       >
                         {r.name}

@@ -16,6 +16,7 @@ class JobCommand(str, Enum):
     BACKFILL = "backfill"
     DATA_SYNC = "data_sync"
     ADD_COMPANIES_BY_MARKET_CAP = "add_companies_by_market_cap"
+    RECOMMENDATION_ANALYSIS = "recommendation_analysis"
     ECHO = "echo"  # dummy job for testing
 
 
