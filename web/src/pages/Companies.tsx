@@ -35,6 +35,7 @@ export default function Companies() {
   const { user, loading } = useUser();
   const navigate = useNavigate();
   const [companies, setCompanies] = useState<CompanyRow[]>([]);
+  const [search, setSearch] = useState("");
   const [sectorFilter, setSectorFilter] = useState("");
   const [countryFilter, setCountryFilter] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -78,6 +79,15 @@ export default function Companies() {
     }
   };
 
+  const q = search.toLowerCase();
+  const filtered = q
+    ? companies.filter(
+        (c) =>
+          c.ticker.toLowerCase().includes(q) ||
+          c.name.toLowerCase().includes(q),
+      )
+    : companies;
+
   if (loading || !user) return null;
 
   return (
@@ -85,6 +95,13 @@ export default function Companies() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">Companies</h1>
         <div className="flex items-center gap-3">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name or ticker..."
+            className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 placeholder-gray-500 w-52"
+          />
           <select
             value={countryFilter}
             onChange={(e) => setCountryFilter(e.target.value)}
@@ -132,7 +149,7 @@ export default function Companies() {
       )}
 
       <div className="rounded-lg border border-gray-800 bg-gray-900">
-        <CompanyTable companies={companies} />
+        <CompanyTable companies={filtered} />
       </div>
     </div>
   );

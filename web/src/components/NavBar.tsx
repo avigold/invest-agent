@@ -1,58 +1,44 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 
+const NAV_LINKS = [
+  { to: "/countries", label: "Countries" },
+  { to: "/industries", label: "Industries" },
+  { to: "/companies", label: "Companies" },
+  { to: "/recommendations", label: "Recommendations" },
+  { to: "/jobs", label: "Jobs" },
+];
+
 export default function NavBar() {
   const { user, loading, logout } = useUser();
+  const [open, setOpen] = useState(false);
 
   return (
     <nav className="border-b border-gray-800 bg-gray-900">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-6">
-          <Link to="/" className="text-lg font-bold text-white">
-            Invest Agent
-          </Link>
-          {user && (
-            <>
+        {/* Logo */}
+        <Link to="/dashboard" className="text-lg font-bold text-white">
+          Invest Agent
+        </Link>
+
+        {/* Desktop nav */}
+        {user && (
+          <div className="hidden lg:flex items-center gap-6">
+            {NAV_LINKS.map((l) => (
               <Link
-                to="/dashboard"
+                key={l.to}
+                to={l.to}
                 className="text-sm text-gray-400 hover:text-white"
               >
-                Dashboard
+                {l.label}
               </Link>
-              <Link
-                to="/countries"
-                className="text-sm text-gray-400 hover:text-white"
-              >
-                Countries
-              </Link>
-              <Link
-                to="/recommendations"
-                className="text-sm text-gray-400 hover:text-white"
-              >
-                Recommendations
-              </Link>
-              <Link
-                to="/companies"
-                className="text-sm text-gray-400 hover:text-white"
-              >
-                Companies
-              </Link>
-              <Link
-                to="/industries"
-                className="text-sm text-gray-400 hover:text-white"
-              >
-                Industries
-              </Link>
-              <Link
-                to="/jobs"
-                className="text-sm text-gray-400 hover:text-white"
-              >
-                Jobs
-              </Link>
-            </>
-          )}
-        </div>
-        <div className="flex items-center gap-4">
+            ))}
+          </div>
+        )}
+
+        {/* Desktop account */}
+        <div className="hidden lg:flex items-center gap-4">
           {loading ? null : user ? (
             <>
               <span className="text-sm text-gray-400">{user.name}</span>
@@ -75,7 +61,73 @@ export default function NavBar() {
             </Link>
           )}
         </div>
+
+        {/* Mobile hamburger */}
+        <button
+          onClick={() => setOpen(!open)}
+          className="lg:hidden flex flex-col items-center justify-center w-8 h-8 gap-1.5"
+          aria-label="Toggle menu"
+        >
+          <span
+            className={`block h-0.5 w-5 bg-gray-400 transition-transform ${open ? "translate-y-2 rotate-45" : ""}`}
+          />
+          <span
+            className={`block h-0.5 w-5 bg-gray-400 transition-opacity ${open ? "opacity-0" : ""}`}
+          />
+          <span
+            className={`block h-0.5 w-5 bg-gray-400 transition-transform ${open ? "-translate-y-2 -rotate-45" : ""}`}
+          />
+        </button>
       </div>
+
+      {/* Mobile menu */}
+      {open && (
+        <div className="lg:hidden border-t border-gray-800 px-4 pb-4 pt-2">
+          {user && (
+            <div className="flex flex-col gap-1">
+              {NAV_LINKS.map((l) => (
+                <Link
+                  key={l.to}
+                  to={l.to}
+                  onClick={() => setOpen(false)}
+                  className="rounded-lg px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white"
+                >
+                  {l.label}
+                </Link>
+              ))}
+            </div>
+          )}
+          <div className="mt-3 border-t border-gray-800 pt-3">
+            {loading ? null : user ? (
+              <div className="flex items-center justify-between px-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-400">{user.name}</span>
+                  <span className="rounded bg-gray-800 px-2 py-0.5 text-xs text-gray-300 uppercase">
+                    {user.plan}
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                    logout();
+                  }}
+                  className="text-sm text-gray-400 hover:text-white"
+                >
+                  Log out
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/login"
+                onClick={() => setOpen(false)}
+                className="block rounded bg-brand px-3 py-1.5 text-center text-sm font-medium text-white hover:bg-brand-dark"
+              >
+                Sign in
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
     </nav>
   );
 }

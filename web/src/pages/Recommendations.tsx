@@ -39,6 +39,7 @@ export default function Recommendations() {
   const [recommendations, setRecommendations] = useState<RecommendationRow[]>(
     []
   );
+  const [search, setSearch] = useState("");
   const [classFilter, setClassFilter] = useState("");
   const [countryFilter, setCountryFilter] = useState("");
   const [sectorFilter, setSectorFilter] = useState("");
@@ -71,15 +72,20 @@ export default function Recommendations() {
       );
   }, [user, classFilter, countryFilter, sectorFilter]);
 
+  const q = search.toLowerCase();
+  const filtered = q
+    ? recommendations.filter(
+        (r) =>
+          r.ticker.toLowerCase().includes(q) ||
+          r.name.toLowerCase().includes(q),
+      )
+    : recommendations;
+
   if (loading || !user) return null;
 
-  const buys = recommendations.filter((r) => r.classification === "Buy").length;
-  const holds = recommendations.filter(
-    (r) => r.classification === "Hold"
-  ).length;
-  const sells = recommendations.filter(
-    (r) => r.classification === "Sell"
-  ).length;
+  const buys = filtered.filter((r) => r.classification === "Buy").length;
+  const holds = filtered.filter((r) => r.classification === "Hold").length;
+  const sells = filtered.filter((r) => r.classification === "Sell").length;
 
   return (
     <div>
@@ -108,6 +114,13 @@ export default function Recommendations() {
       )}
 
       <div className="mb-4 flex items-center gap-3">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name or ticker..."
+          className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 placeholder-gray-500 w-52"
+        />
         <select
           value={classFilter}
           onChange={(e) => setClassFilter(e.target.value)}
@@ -145,7 +158,7 @@ export default function Recommendations() {
       </div>
 
       <div className="rounded-lg border border-gray-800 bg-gray-900">
-        <RecommendationTable recommendations={recommendations} />
+        <RecommendationTable recommendations={filtered} />
       </div>
     </div>
   );
