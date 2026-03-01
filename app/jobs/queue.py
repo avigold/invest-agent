@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 HEAVY_COMMANDS = {
     "country_refresh", "industry_refresh", "company_refresh",
     "universe_refresh", "backfill", "data_sync",
+    "add_companies_by_market_cap",
 }
 
 

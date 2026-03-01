@@ -166,6 +166,7 @@ Industry/company endpoints follow the same decision-packet pattern.
 - For user-specific universes/watchlists, compute user-tailored packets by joining against shared data.
 
 ## Implementation rules for Claude
+- **PRD-first workflow**: Every plan must produce a PRD at `docs/product/prd_X_Y.md` **before** any code is written. The PRD documents: problem statement, solution design, data sources, API surface, data model changes, files changed, and acceptance criteria. Major milestones use `prd_X_0.md`; incremental features use `prd_X_Y.md`. The PRD is the source of truth — code implements what the PRD specifies.
 - Implement one milestone at a time.
 - After each milestone:
   - add tests

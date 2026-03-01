@@ -92,6 +92,24 @@ async def company_refresh_handler(
 
         await db.commit()
 
+        # Also include user-added companies (not in config)
+        config_tickers = {cc["ticker"] for cc in companies_config}
+        if not ticker_filter:
+            result = await db.execute(
+                select(Company).where(Company.ticker.notin_(config_tickers))
+            )
+            db_only = result.scalars().all()
+            companies.extend(db_only)
+            if db_only:
+                _log(job, f"Including {len(db_only)} user-added companies from DB")
+        elif ticker_filter not in config_tickers:
+            result = await db.execute(
+                select(Company).where(Company.ticker == ticker_filter)
+            )
+            extra = result.scalar_one_or_none()
+            if extra and extra not in companies:
+                companies.append(extra)
+
         if not companies:
             _log(job, f"No companies matched filter ticker={ticker_filter}")
             return

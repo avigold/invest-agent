@@ -15,6 +15,7 @@ class JobCommand(str, Enum):
     PACKET_BUILD = "packet_build"
     BACKFILL = "backfill"
     DATA_SYNC = "data_sync"
+    ADD_COMPANIES_BY_MARKET_CAP = "add_companies_by_market_cap"
     ECHO = "echo"  # dummy job for testing
 
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
 import CompanyTable, { CompanyRow } from "@/components/CompanyTable";
@@ -109,6 +109,12 @@ export default function Companies() {
               </option>
             ))}
           </select>
+          <Link
+            to="/companies/add"
+            className="rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700"
+          >
+            + Add Companies
+          </Link>
           <button
             onClick={submitRefresh}
             disabled={submitting}

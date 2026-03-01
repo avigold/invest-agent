@@ -45,6 +45,7 @@ _FREE_LIMITS: dict[str, int] = {
     "universe_refresh": 2,
     "backfill": 2,
     "data_sync": 5,
+    "add_companies_by_market_cap": 3,
 }
 
 
