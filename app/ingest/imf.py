@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Country, CountrySeries, CountrySeriesPoint, DataSource
 from app.ingest.artefact_store import ArtefactStore
+from app.ingest.freshness import FRESHNESS_HOURS
 
 _BASE_URL = "https://www.imf.org/external/datamapper/api/v1"
 
@@ -70,6 +71,7 @@ async def ingest_imf_for_country(
     start_year: int,
     end_year: int,
     log_fn: Callable[[str], None],
+    force: bool = False,
 ) -> list[uuid.UUID]:
     """Fetch IMF WEO indicators for a country, store artefacts + series points.
 
@@ -89,6 +91,18 @@ async def ingest_imf_for_country(
     async with httpx.AsyncClient() as client:
         for series_name, indicator_code in indicators.items():
             log_fn(f"  IMF: {country.iso2} / {series_name} ({indicator_code})")
+
+            # Freshness check
+            if not force:
+                existing = await artefact_store.find_fresh(
+                    db, imf_source.id,
+                    {"iso2": country.iso2, "indicator": indicator_code},
+                    FRESHNESS_HOURS["imf_weo"],
+                )
+                if existing is not None:
+                    log_fn(f"    Skipped (fresh)")
+                    artefact_ids.append(existing.id)
+                    continue
 
             try:
                 points, raw_text = await fetch_imf_indicator(

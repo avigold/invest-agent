@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     max_concurrent_heavy_jobs: int = 4
     max_user_concurrent_jobs: int = 1
 
+    scheduler_enabled: bool = False
+    scheduler_timezone: str = "UTC"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

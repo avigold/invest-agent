@@ -217,6 +217,7 @@ async def test_gdelt_ingest_with_real_data():
 
     mock_store = AsyncMock()
     mock_store.store.return_value = mock_artefact
+    mock_store.find_fresh.return_value = None
 
     mock_series = MagicMock()
     mock_series.id = uuid.uuid4()
@@ -275,6 +276,7 @@ async def test_gdelt_ingest_falls_back_on_api_failure():
 
     mock_store = AsyncMock()
     mock_store.store.return_value = mock_artefact
+    mock_store.find_fresh.return_value = None
 
     mock_series = MagicMock()
     mock_series.id = uuid.uuid4()

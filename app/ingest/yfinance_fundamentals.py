@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Company, CompanySeries, CompanySeriesPoint, DataSource
 from app.ingest.artefact_store import ArtefactStore
+from app.ingest.freshness import FRESHNESS_HOURS
 
 # Metrics where yfinance reports negative values that should be positive
 _ABSOLUTE_VALUE_METRICS = {"capex"}
@@ -126,6 +127,7 @@ async def ingest_yfinance_fundamentals_for_company(
     company: Company,
     column_map: dict[str, list[str]],
     log_fn: Callable[[str], None],
+    force: bool = False,
 ) -> list[uuid.UUID]:
     """Fetch yfinance financial statements, store artefact + series points.
 
@@ -134,6 +136,17 @@ async def ingest_yfinance_fundamentals_for_company(
     artefact_ids: list[uuid.UUID] = []
     symbol = company.ticker
     log_fn(f"  yfinance fundamentals: {symbol}")
+
+    # Freshness check
+    if not force:
+        existing = await artefact_store.find_fresh(
+            db, yf_source.id,
+            {"symbol": symbol, "type": "financials"},
+            FRESHNESS_HOURS["yfinance_fundamentals"],
+        )
+        if existing is not None:
+            log_fn(f"    Skipped (fresh)")
+            return [existing.id]
 
     loop = asyncio.get_running_loop()
     try:

@@ -14,6 +14,7 @@ class JobCommand(str, Enum):
     UNIVERSE_REFRESH = "universe_refresh"
     PACKET_BUILD = "packet_build"
     BACKFILL = "backfill"
+    DATA_SYNC = "data_sync"
     ECHO = "echo"  # dummy job for testing
 
 

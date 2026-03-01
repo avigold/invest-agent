@@ -44,6 +44,7 @@ async def country_refresh_handler(
     iso2_filter = job.params.get("iso2")  # None = all countries
     as_of_str = job.params.get("as_of")
     start_year = job.params.get("start_year", 2015)
+    force = job.params.get("force", False)
 
     if as_of_str:
         as_of = datetime.strptime(as_of_str, "%Y-%m-%d").date()
@@ -51,7 +52,7 @@ async def country_refresh_handler(
         today = datetime.now(tz=timezone.utc).date()
         as_of = today.replace(day=1)
 
-    _log(job, f"Country refresh: as_of={as_of}, start_year={start_year}")
+    _log(job, f"Country refresh: as_of={as_of}, start_year={start_year}, force={force}")
 
     async with session_factory() as db:
         # 1. Seed data sources
@@ -120,6 +121,7 @@ async def country_refresh_handler(
                 start_year=start_year,
                 end_year=end_year,
                 log_fn=lambda msg: _log(job, msg),
+                force=force,
             )
             all_artefact_ids.extend(str(aid) for aid in wb_ids)
 
@@ -135,6 +137,7 @@ async def country_refresh_handler(
                     start_year=start_year,
                     end_year=end_year,
                     log_fn=lambda msg: _log(job, msg),
+                    force=force,
                 )
                 all_artefact_ids.extend(str(aid) for aid in imf_ids)
 
@@ -150,6 +153,7 @@ async def country_refresh_handler(
                 start_date=fred_start,
                 end_date=fred_end,
                 log_fn=lambda msg: _log(job, msg),
+                force=force,
             )
             all_artefact_ids.extend(str(aid) for aid in fred_ids)
 
@@ -163,6 +167,7 @@ async def country_refresh_handler(
                 start_date=market_start,
                 end_date=market_end,
                 log_fn=lambda msg: _log(job, msg),
+                force=force,
             )
             all_artefact_ids.extend(str(aid) for aid in market_ids)
 
@@ -175,6 +180,7 @@ async def country_refresh_handler(
                 country=country,
                 as_of=as_of,
                 log_fn=lambda msg: _log(job, msg),
+                force=force,
             )
             all_artefact_ids.extend(str(aid) for aid in gdelt_ids)
 

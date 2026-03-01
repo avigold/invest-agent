@@ -48,9 +48,18 @@ async def lifespan(app: FastAPI):
 
     init_job_globals(registry, job_queue, run_fn)
 
+    # Start scheduler if enabled
+    from app.scheduler.daily import DailyScheduler
+    scheduler = DailyScheduler(registry, job_queue, run_fn, session_factory)
+    try:
+        await scheduler.start()
+    except Exception:
+        logger.warning("Scheduler failed to start", exc_info=True)
+
     yield
 
     # Shutdown
+    await scheduler.stop()
     from app.db.session import dispose_engine
     await dispose_engine()
 

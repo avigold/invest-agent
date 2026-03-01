@@ -42,6 +42,7 @@ async def company_refresh_handler(
     # Parse params
     ticker_filter = job.params.get("ticker")  # None = all companies
     as_of_str = job.params.get("as_of")
+    force = job.params.get("force", False)
 
     if as_of_str:
         as_of = datetime.strptime(as_of_str, "%Y-%m-%d").date()
@@ -49,7 +50,7 @@ async def company_refresh_handler(
         today = datetime.now(tz=timezone.utc).date()
         as_of = today.replace(day=1)
 
-    _log(job, f"Company refresh: as_of={as_of}")
+    _log(job, f"Company refresh: as_of={as_of}, force={force}")
 
     async with session_factory() as db:
         # 1. Seed data sources
@@ -116,6 +117,7 @@ async def company_refresh_handler(
                     company=company,
                     concept_map=concept_map,
                     log_fn=lambda msg, j=job: _log(j, msg),
+                    force=force,
                 )
                 all_artefact_ids.extend(str(aid) for aid in edgar_ids)
             else:
@@ -127,6 +129,7 @@ async def company_refresh_handler(
                     company=company,
                     column_map=yf_column_map,
                     log_fn=lambda msg, j=job: _log(j, msg),
+                    force=force,
                 )
                 all_artefact_ids.extend(str(aid) for aid in yf_ids)
 
@@ -139,6 +142,7 @@ async def company_refresh_handler(
                 start_date=market_start,
                 end_date=market_end,
                 log_fn=lambda msg, j=job: _log(j, msg),
+                force=force,
             )
             all_artefact_ids.extend(str(aid) for aid in market_ids)
 

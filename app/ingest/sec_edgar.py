@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Company, CompanySeries, CompanySeriesPoint, DataSource
 from app.ingest.artefact_store import ArtefactStore
+from app.ingest.freshness import FRESHNESS_HOURS
 
 _BASE_URL = "https://data.sec.gov/api/xbrl/companyfacts"
 _USER_AGENT = "InvestAgent/1.0 (admin@investagent.app)"
@@ -100,6 +101,7 @@ async def ingest_edgar_for_company(
     company: Company,
     concept_map: dict[str, list[str]],
     log_fn: Callable[[str], None],
+    force: bool = False,
 ) -> list[uuid.UUID]:
     """Fetch EDGAR XBRL facts for a company, store artefact + series points.
 
@@ -112,6 +114,17 @@ async def ingest_edgar_for_company(
 
     async with httpx.AsyncClient() as client:
         log_fn(f"  SEC EDGAR: {company.ticker} (CIK {company.cik})")
+
+        # Freshness check
+        if not force:
+            existing = await artefact_store.find_fresh(
+                db, edgar_source.id,
+                {"cik": company.cik},
+                FRESHNESS_HOURS["sec_edgar"],
+            )
+            if existing is not None:
+                log_fn(f"    Skipped (fresh)")
+                return [existing.id]
 
         try:
             facts, raw_text = await fetch_company_facts(client, company.cik)

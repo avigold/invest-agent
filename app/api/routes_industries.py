@@ -39,6 +39,20 @@ async def list_industries(
     if latest_date is None:
         return []
 
+    # Get scored_at from the most recent packet for this date
+    scored_at_q = (
+        select(DecisionPacket.created_at)
+        .where(
+            DecisionPacket.packet_type == "industry",
+            DecisionPacket.as_of == latest_date,
+            DecisionPacket.summary_version == INDUSTRY_SUMMARY_VERSION,
+        )
+        .order_by(desc(DecisionPacket.created_at))
+        .limit(1)
+    )
+    scored_at_result = await db.execute(scored_at_q)
+    scored_at = scored_at_result.scalar_one_or_none()
+
     # Get all scores for that date
     scores_q = (
         select(IndustryScore, Industry, Country)
@@ -68,6 +82,7 @@ async def list_industries(
             "overall_score": float(score.overall_score),
             "rank": rank,
             "as_of": str(score.as_of),
+            "scored_at": scored_at.isoformat() if scored_at else None,
             "calc_version": score.calc_version,
         })
 

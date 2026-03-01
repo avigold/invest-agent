@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Country, CountrySeries, CountrySeriesPoint, DataSource
 from app.ingest.artefact_store import ArtefactStore
+from app.ingest.freshness import FRESHNESS_HOURS
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +131,7 @@ async def ingest_gdelt_stability(
     country: Country,
     as_of: date,
     log_fn: Callable[[str], None],
+    force: bool = False,
 ) -> list[uuid.UUID]:
     """Fetch instability ratio from GDELT DOC API, compute stability score.
 
@@ -141,6 +143,18 @@ async def ingest_gdelt_stability(
     Falls back to 0.5 if the API is unreachable or returns no data.
     """
     fips = _ISO2_TO_FIPS.get(country.iso2, country.iso2)
+
+    # Freshness check
+    if not force:
+        existing = await artefact_store.find_fresh(
+            db, gdelt_source.id,
+            {"iso2": country.iso2},
+            FRESHNESS_HOURS["gdelt"],
+        )
+        if existing is not None:
+            log_fn(f"  GDELT stability: {country.iso2} — skipped (fresh)")
+            return [existing.id]
+
     instability_query = _INSTABILITY_QUERY.format(fips=fips)
     total_query = _TOTAL_QUERY.format(fips=fips)
 

@@ -44,6 +44,7 @@ _FREE_LIMITS: dict[str, int] = {
     "company_refresh": 5,
     "universe_refresh": 2,
     "backfill": 2,
+    "data_sync": 5,
 }
 
 

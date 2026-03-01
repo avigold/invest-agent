@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, desc, cast, type_coerce
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Artefact
@@ -73,3 +74,31 @@ class ArtefactStore:
         db.add(artefact)
         await db.flush()
         return artefact
+
+    async def find_fresh(
+        self,
+        db: AsyncSession,
+        data_source_id: uuid.UUID,
+        fetch_params_filter: dict,
+        max_age_hours: int,
+    ) -> Artefact | None:
+        """Find a recent artefact matching source and params filter.
+
+        Uses JSONB containment (@>) to match fetch_params.
+        Returns the most recent artefact if fetched within max_age_hours,
+        otherwise None.
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+
+        query = (
+            select(Artefact)
+            .where(
+                Artefact.data_source_id == data_source_id,
+                Artefact.fetch_params.op("@>")(cast(fetch_params_filter, JSONB)),
+                Artefact.fetched_at >= cutoff,
+            )
+            .order_by(desc(Artefact.fetched_at))
+            .limit(1)
+        )
+        result = await db.execute(query)
+        return result.scalar_one_or_none()

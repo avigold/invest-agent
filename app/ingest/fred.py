@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import CountrySeries, CountrySeriesPoint, Country, DataSource
 from app.ingest.artefact_store import ArtefactStore
+from app.ingest.freshness import FRESHNESS_HOURS
 
 _BASE_URL = "https://api.stlouisfed.org/fred"
 
@@ -64,6 +65,7 @@ async def ingest_fred_for_country(
     start_date: str,
     end_date: str,
     log_fn: Callable[[str], None],
+    force: bool = False,
 ) -> list[uuid.UUID]:
     """Fetch FRED series, store artefacts + points.
 
@@ -83,6 +85,18 @@ async def ingest_fred_for_country(
         for series_key, meta in fred_series.items():
             series_id = meta["series_id"]
             log_fn(f"  FRED: {series_id} ({meta['name']})")
+
+            # Freshness check
+            if not force:
+                existing = await artefact_store.find_fresh(
+                    db, fred_source.id,
+                    {"series_id": series_id},
+                    FRESHNESS_HOURS["fred"],
+                )
+                if existing is not None:
+                    log_fn(f"    Skipped (fresh)")
+                    artefact_ids.append(existing.id)
+                    continue
 
             try:
                 observations, raw_text = await fetch_fred_series(

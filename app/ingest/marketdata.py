@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Country, CountrySeries, CountrySeriesPoint, DataSource
 from app.ingest.artefact_store import ArtefactStore
+from app.ingest.freshness import FRESHNESS_HOURS
 
 
 def fetch_index_history(
@@ -53,6 +54,7 @@ async def ingest_market_data_for_country(
     start_date: str,
     end_date: str,
     log_fn: Callable[[str], None],
+    force: bool = False,
 ) -> list[uuid.UUID]:
     """Fetch equity index data, store artefact + daily close points.
 
@@ -64,6 +66,17 @@ async def ingest_market_data_for_country(
         return []
 
     log_fn(f"  Market data: {country.iso2} / {symbol}")
+
+    # Freshness check
+    if not force:
+        existing = await artefact_store.find_fresh(
+            db, yf_source.id,
+            {"symbol": symbol},
+            FRESHNESS_HOURS["yfinance_market"],
+        )
+        if existing is not None:
+            log_fn(f"    Skipped (fresh)")
+            return [existing.id]
 
     loop = asyncio.get_running_loop()
     try:
