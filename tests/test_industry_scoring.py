@@ -35,34 +35,34 @@ def test_load_rubric_has_thresholds():
 # ---------------------------------------------------------------------------
 
 def test_evaluate_rubric_energy_all_favorable():
-    """Energy sector with all favorable conditions should get max raw score."""
+    """Energy sector with all favorable conditions should score high."""
     rubric = load_rubric()
     macro = {
-        "gdp_growth_pct": 5.0,      # high → favorable (threshold 3.0)
-        "inflation_pct": 6.0,        # high → favorable (threshold 4.0)
-        "current_account_gdp_pct": 3.0,  # high → favorable (threshold 0.0)
-        "stability_index": 0.8,      # high → favorable (threshold 0.5)
+        "gdp_growth_pct": 5.0,      # high → favorable; abs_score(5, -2, 8) = 70
+        "inflation_pct": 6.0,        # high → favorable; abs_score(6, 1, 15, hib=True) = 35.7
+        "current_account_gdp_pct": 3.0,  # high → favorable; abs_score(3, -8, 10) = 61.1
+        "stability_index": 0.8,      # high → favorable; abs_score(0.8, 0, 1) = 80
     }
     results = evaluate_rubric(rubric, macro)
     energy = results["energy"]
-    assert energy["raw_score"] == 4  # all 4 signals positive
-    assert energy["max_possible"] == 4
-    assert all(s["signal"] == 1 for s in energy["signals"])
+    assert energy["raw_score"] > 55
+    assert energy["max_possible"] == 100
+    assert all(s["score"] > 35 for s in energy["signals"])
 
 
 def test_evaluate_rubric_energy_all_unfavorable():
-    """Energy sector with all unfavorable conditions should get min raw score."""
+    """Energy sector with all unfavorable conditions should score low."""
     rubric = load_rubric()
     macro = {
-        "gdp_growth_pct": 1.0,      # low → unfavorable
-        "inflation_pct": 2.0,        # low → unfavorable
-        "current_account_gdp_pct": -2.0,  # low → unfavorable
-        "stability_index": 0.3,      # low → unfavorable
+        "gdp_growth_pct": -1.0,     # high favorable; abs_score(-1, -2, 8) = 10
+        "inflation_pct": 2.0,        # high favorable; abs_score(2, 1, 15) = 7.1
+        "current_account_gdp_pct": -7.0,  # high favorable; abs_score(-7, -8, 10) = 5.6
+        "stability_index": 0.1,      # high favorable; abs_score(0.1, 0, 1) = 10
     }
     results = evaluate_rubric(rubric, macro)
     energy = results["energy"]
-    assert energy["raw_score"] == -4
-    assert all(s["signal"] == -1 for s in energy["signals"])
+    assert energy["raw_score"] < 15
+    assert all(s["score"] < 15 for s in energy["signals"])
 
 
 def test_evaluate_rubric_consumer_disc_low_inflation_favorable():
@@ -70,19 +70,19 @@ def test_evaluate_rubric_consumer_disc_low_inflation_favorable():
     rubric = load_rubric()
     macro = {
         "gdp_growth_pct": 5.0,       # high → favorable
-        "unemployment_pct": 3.0,      # low → favorable
-        "inflation_pct": 2.0,         # low → favorable
-        "central_bank_rate_pct": 2.0, # low → favorable
-        "hy_credit_spread_bps": 200,  # low → favorable
+        "unemployment_pct": 3.0,      # low → favorable (hib=False)
+        "inflation_pct": 2.0,         # low → favorable (hib=False)
+        "central_bank_rate_pct": 2.0, # low → favorable (hib=False)
+        "hy_credit_spread_bps": 200,  # low → favorable (hib=False)
     }
     results = evaluate_rubric(rubric, macro)
     cd = results["consumer_discretionary"]
-    assert cd["raw_score"] == 5  # all favorable
-    assert cd["max_possible"] == 5
+    assert cd["raw_score"] > 55
+    assert cd["max_possible"] == 100
 
 
 def test_evaluate_rubric_missing_data_neutral():
-    """Missing indicators should contribute 0 (neutral signal)."""
+    """Missing indicators should contribute 50 (neutral score)."""
     rubric = load_rubric()
     macro = {
         "gdp_growth_pct": 5.0,      # high → favorable
@@ -90,25 +90,24 @@ def test_evaluate_rubric_missing_data_neutral():
     }
     results = evaluate_rubric(rubric, macro)
     energy = results["energy"]
-    # 1 favorable + 3 missing (0)
-    assert energy["raw_score"] == 1
     missing = [s for s in energy["signals"] if s.get("reason") == "missing_data"]
     assert len(missing) == 3
+    assert all(s["score"] == 50.0 for s in missing)
 
 
 def test_evaluate_rubric_financials_yield_curve():
     """Financials benefit from steep yield curve."""
     rubric = load_rubric()
     macro = {
-        "yield_curve_10y2y_bps": 150,  # high → favorable (threshold 50)
-        "gdp_growth_pct": 4.0,         # high → favorable
-        "unemployment_pct": 3.0,        # low → favorable
-        "hy_credit_spread_bps": 200,    # low → favorable
-        "stability_index": 0.9,         # high → favorable
+        "yield_curve_10y2y_bps": 150,  # high → favorable; abs_score(150, -100, 300) = 62.5
+        "gdp_growth_pct": 4.0,         # high → favorable; abs_score(4, -2, 8) = 60
+        "unemployment_pct": 3.0,        # low → favorable; abs_score(3, 2, 15, hib=False) = 92.3
+        "hy_credit_spread_bps": 200,    # low → favorable; abs_score(200, 200, 1000, hib=False) = 100
+        "stability_index": 0.9,         # high → favorable; abs_score(0.9, 0, 1) = 90
     }
     results = evaluate_rubric(rubric, macro)
     fin = results["financials"]
-    assert fin["raw_score"] == 5  # all 5 favorable
+    assert fin["raw_score"] > 55
 
 
 def test_evaluate_rubric_returns_all_sectors():
@@ -157,7 +156,7 @@ def test_detect_risks_low_score():
 
     score = MagicMock()
     score.overall_score = Decimal("15.0")
-    score.component_data = {"signals": [{"signal": -1}, {"signal": -1}]}
+    score.component_data = {"signals": [{"score": 10}, {"score": 20}]}
 
     logs: list[str] = []
     risks = detect_industry_risks(industry, country, score, date(2026, 2, 1), logs.append)
@@ -168,7 +167,7 @@ def test_detect_risks_low_score():
 
 
 def test_detect_risks_all_negative_signals():
-    """Should detect all_signals_negative risk."""
+    """Should detect all_signals_negative risk when all scores below 30."""
     industry = MagicMock()
     industry.id = uuid.uuid4()
     industry.name = "Utilities"
@@ -181,9 +180,9 @@ def test_detect_risks_all_negative_signals():
     score.overall_score = Decimal("35.0")  # above 30, so no headwinds
     score.component_data = {
         "signals": [
-            {"signal": -1},
-            {"signal": -1},
-            {"signal": -1},
+            {"score": 10},
+            {"score": 15},
+            {"score": 25},
         ]
     }
 
@@ -195,7 +194,7 @@ def test_detect_risks_all_negative_signals():
 
 
 def test_detect_risks_no_risks_for_high_score():
-    """High-scoring combo with mixed signals should have no risks."""
+    """High-scoring combo with mixed scores should have no risks."""
     industry = MagicMock()
     industry.id = uuid.uuid4()
     industry.name = "IT"
@@ -208,9 +207,9 @@ def test_detect_risks_no_risks_for_high_score():
     score.overall_score = Decimal("75.0")
     score.component_data = {
         "signals": [
-            {"signal": 1},
-            {"signal": -1},
-            {"signal": 1},
+            {"score": 80},
+            {"score": 30},
+            {"score": 70},
         ]
     }
 

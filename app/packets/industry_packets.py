@@ -51,7 +51,6 @@ async def build_industry_packet(
         "summary_version": INDUSTRY_SUMMARY_VERSION,
         "scores": {
             "overall": float(score.overall_score),
-            "rubric": float(score.rubric_score),
         },
         "rank": rank,
         "rank_total": len(all_scores),

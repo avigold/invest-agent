@@ -18,7 +18,8 @@ from app.db.models import (
     IndustryRiskRegister,
     IndustryScore,
 )
-from app.score.versions import INDUSTRY_CALC_VERSION
+from app.score.absolute import absolute_score
+from app.score.versions import INDUSTRY_CALC_VERSION, INDUSTRY_INDICATOR_THRESHOLDS
 
 _RUBRIC_PATH = Path(__file__).resolve().parents[2] / "config" / "sector_macro_sensitivity_v1.json"
 
@@ -76,58 +77,71 @@ def evaluate_rubric(
 ) -> dict[str, dict]:
     """Evaluate the rubric for all sectors against a country's macro data.
 
-    Returns {sector_key: {"raw_score": int, "max_possible": int,
-             "min_possible": int, "signals": list[dict]}}.
+    Uses continuous absolute_score() per indicator instead of binary +1/-1.
+    Returns {sector_key: {"raw_score": float (0-100), "max_possible": 100,
+             "min_possible": 0, "signals": list[dict]}}.
     """
-    thresholds = rubric["thresholds"]
     results: dict[str, dict] = {}
 
     for sector_key, sector_cfg in rubric["sectors"].items():
         signals: list[dict] = []
-        raw_score = 0
-        n_indicators = len(sector_cfg["sensitivities"])
+        total_weight = 0
+        weighted_sum = 0.0
 
         for sens in sector_cfg["sensitivities"]:
             indicator = sens["indicator"]
             favorable_when = sens["favorable_when"]
+            weight = sens.get("weight", 1)
             value = macro_data.get(indicator)
-            threshold_cfg = thresholds[indicator]
-            threshold = threshold_cfg["threshold"]
 
-            if value is None:
-                # Missing data: contribute 0 (neutral)
+            # Look up floor/ceiling from the thresholds dict
+            series_name = _INDICATOR_TO_SERIES.get(indicator, indicator)
+            thresh = INDUSTRY_INDICATOR_THRESHOLDS.get(series_name)
+
+            if thresh is None:
+                # Unknown indicator — treat as neutral
                 signals.append({
                     "indicator": indicator,
                     "value": None,
-                    "threshold": threshold,
                     "favorable_when": favorable_when,
-                    "signal": 0,
-                    "reason": "missing_data",
+                    "score": 50.0,
+                    "floor": None,
+                    "ceiling": None,
+                    "reason": "no_thresholds",
                 })
+                weighted_sum += 50.0 * weight
+                total_weight += weight
                 continue
 
-            # Determine if the current value is "high" or "low" relative to threshold
-            is_high = value >= threshold
+            higher_is_better = favorable_when == "high"
+            score = absolute_score(
+                value,
+                thresh["floor"],
+                thresh["ceiling"],
+                higher_is_better=higher_is_better,
+            )
 
-            # Determine signal: +1 if favorable, -1 if unfavorable
-            if favorable_when == "high":
-                signal = 1 if is_high else -1
-            else:  # favorable_when == "low"
-                signal = 1 if not is_high else -1
-
-            raw_score += signal
-            signals.append({
+            signal_entry: dict = {
                 "indicator": indicator,
-                "value": round(value, 2),
-                "threshold": threshold,
+                "value": round(value, 4) if value is not None else None,
                 "favorable_when": favorable_when,
-                "signal": signal,
-            })
+                "score": round(score, 2),
+                "floor": thresh["floor"],
+                "ceiling": thresh["ceiling"],
+            }
+            if value is None:
+                signal_entry["reason"] = "missing_data"
+
+            signals.append(signal_entry)
+            weighted_sum += score * weight
+            total_weight += weight
+
+        raw_score = round(weighted_sum / total_weight, 2) if total_weight > 0 else 50.0
 
         results[sector_key] = {
             "raw_score": raw_score,
-            "max_possible": n_indicators,
-            "min_possible": -n_indicators,
+            "max_possible": 100,
+            "min_possible": 0,
             "signals": signals,
         }
 
@@ -164,11 +178,10 @@ async def compute_industry_scores(
     as_of: date,
     log_fn: Callable[[str], None],
 ) -> list[IndustryScore]:
-    """Compute rubric-based scores for all industry×country combinations.
+    """Compute continuous scores for all industry×country combinations.
 
-    Uses linear rescale: overall = ((raw_score + N) / (2 * N)) * 100
-    where N = max_possible (number of indicators for that sector).
-    Universe-independent — each combination scored on its own merits.
+    evaluate_rubric() now returns raw_score as 0-100 directly via absolute_score().
+    No rescaling needed.
     """
     rubric = load_rubric()
 
@@ -199,15 +212,7 @@ async def compute_industry_scores(
             if industry is None:
                 continue
 
-            raw_score = result["raw_score"]
-            n = result["max_possible"]
-
-            # Linear rescale: all unfavorable (-N) → 0, neutral (0) → 50,
-            # all favorable (+N) → 100
-            if n > 0:
-                overall = round(((raw_score + n) / (2 * n)) * 100, 2)
-            else:
-                overall = 50.0
+            overall = result["raw_score"]
 
             # Get point IDs for evidence tracking
             indicator_names = [s["indicator"] for s in result["signals"]]
@@ -226,14 +231,14 @@ async def compute_industry_scores(
                 country_id=country.id,
                 as_of=as_of,
                 calc_version=INDUSTRY_CALC_VERSION,
-                rubric_score=Decimal(str(raw_score)),
+                rubric_score=Decimal(str(overall)),
                 overall_score=Decimal(str(overall)),
                 component_data=result,
                 point_ids=point_ids,
             )
             scores.append(score)
 
-            log_fn(f"  {sector_cfg['label']} × {country.iso2}: raw={raw_score}, overall={overall:.1f}")
+            log_fn(f"  {sector_cfg['label']} × {country.iso2}: score={overall:.1f}")
 
     log_fn(f"Built {len(scores)} industry scores.")
     return scores
@@ -263,10 +268,10 @@ def detect_industry_risks(
             detected_at=as_of,
         ))
 
-    # All signals negative
+    # All indicators unfavorable (all scores below 30)
     signals = component.get("signals", [])
-    active_signals = [s for s in signals if s.get("signal") != 0]
-    if active_signals and all(s["signal"] == -1 for s in active_signals):
+    scored_signals = [s for s in signals if s.get("reason") not in ("missing_data", "no_thresholds")]
+    if scored_signals and all(s.get("score", 50) < 30 for s in scored_signals):
         risks.append(IndustryRiskRegister(
             industry_id=industry.id,
             country_id=country.id,

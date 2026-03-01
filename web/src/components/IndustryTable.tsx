@@ -19,7 +19,6 @@ export interface IndustryRow {
   country_iso2: string;
   country_name: string;
   overall_score: number;
-  rubric_score: number;
   rank: number;
   as_of: string;
   calc_version: string;
@@ -54,7 +53,6 @@ export default function IndustryTable({
             <th className="px-4 py-3">Sector</th>
             {showCountry && <th className="px-4 py-3">Country</th>}
             <th className="px-4 py-3 text-right">Score</th>
-            <th className="px-4 py-3 text-right">Rubric</th>
           </tr>
         </thead>
         <tbody>
@@ -98,10 +96,6 @@ export default function IndustryTable({
                 className={`px-4 py-3 text-right font-mono text-base font-bold ${scoreColor(row.overall_score)}`}
               >
                 {row.overall_score.toFixed(1)}
-              </td>
-              <td className="px-4 py-3 text-right font-mono text-gray-400">
-                {row.rubric_score > 0 ? "+" : ""}
-                {row.rubric_score}
               </td>
             </tr>
           ))}

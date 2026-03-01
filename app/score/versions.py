@@ -3,8 +3,8 @@
 COUNTRY_CALC_VERSION = "country_v2"
 COUNTRY_SUMMARY_VERSION = "country_summary_v2"
 
-INDUSTRY_CALC_VERSION = "industry_v2"
-INDUSTRY_SUMMARY_VERSION = "industry_summary_v2"
+INDUSTRY_CALC_VERSION = "industry_v3"
+INDUSTRY_SUMMARY_VERSION = "industry_summary_v3"
 
 COUNTRY_WEIGHTS = {
     "macro": 0.50,
@@ -73,6 +73,20 @@ MACRO_ABSOLUTE_THRESHOLDS: dict[str, dict] = {
     "gdp_per_capita":     {"floor": 5_000, "ceiling": 100_000, "higher_is_better": True},  # USD
     "market_cap_gdp":     {"floor": 20.0,  "ceiling": 200.0,   "higher_is_better": True},  # percent of GDP
     "household_consumption_pc": {"floor": 10_000, "ceiling": 45_000, "higher_is_better": True},  # constant 2015 USD
+}
+
+# Industry macro sensitivity indicators (floor/ceiling only — direction comes from rubric config)
+INDUSTRY_INDICATOR_THRESHOLDS: dict[str, dict] = {
+    "gdp_growth":         {"floor": -2.0,  "ceiling": 8.0},
+    "inflation":          {"floor": 1.0,   "ceiling": 15.0},
+    "unemployment":       {"floor": 2.0,   "ceiling": 15.0},
+    "govt_debt_gdp":      {"floor": 20.0,  "ceiling": 200.0},
+    "current_account_gdp":{"floor": -8.0,  "ceiling": 10.0},
+    "fdi_gdp":            {"floor": -1.0,  "ceiling": 8.0},
+    "fedfunds":           {"floor": 0.0,   "ceiling": 10.0},
+    "hy_spread":          {"floor": 200.0, "ceiling": 1000.0},
+    "yield_curve":        {"floor": -100.0,"ceiling": 300.0},
+    "stability":          {"floor": 0.0,   "ceiling": 1.0},
 }
 
 # Market metrics (shared by country and company)

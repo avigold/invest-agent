@@ -35,7 +35,6 @@ interface IndustryPreview {
   country_iso2: string;
   country_name: string;
   overall_score: number;
-  rubric_score: number;
   rank: number;
 }
 

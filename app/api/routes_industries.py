@@ -66,7 +66,6 @@ async def list_industries(
             "country_iso2": country.iso2,
             "country_name": country.name,
             "overall_score": float(score.overall_score),
-            "rubric_score": float(score.rubric_score),
             "rank": rank,
             "as_of": str(score.as_of),
             "calc_version": score.calc_version,

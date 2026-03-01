@@ -7,9 +7,10 @@ import ScoreCard from "@/components/ScoreCard";
 interface Signal {
   indicator: string;
   value: number | null;
-  threshold: number;
   favorable_when: string;
-  signal: number;
+  score: number;
+  floor: number | null;
+  ceiling: number | null;
   reason?: string;
 }
 
@@ -29,30 +30,21 @@ interface IndustrySummary {
   summary_version: string;
   scores: {
     overall: number;
-    rubric: number;
   };
   rank: number;
   rank_total: number;
   component_data: {
     raw_score: number;
-    max_possible: number;
-    min_possible: number;
     signals: Signal[];
     country_macro_summary?: Record<string, number>;
   };
   risks: Risk[];
 }
 
-function signalIcon(signal: number): string {
-  if (signal === 1) return "+";
-  if (signal === -1) return "-";
-  return "?";
-}
-
-function signalColor(signal: number): string {
-  if (signal === 1) return "text-green-400";
-  if (signal === -1) return "text-red-400";
-  return "text-gray-500";
+function scoreColor(score: number): string {
+  if (score >= 60) return "text-green-400";
+  if (score >= 40) return "text-yellow-400";
+  return "text-red-400";
 }
 
 function severityColor(severity: string): string {
@@ -164,27 +156,9 @@ export default function IndustryDetail() {
         </div>
       </div>
 
-      {/* Score cards */}
-      <div className="mb-6 grid grid-cols-2 gap-4">
+      {/* Score card */}
+      <div className="mb-6">
         <ScoreCard label="Overall Score" score={scores.overall} />
-        <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
-          <p className="text-xs uppercase text-gray-500">Rubric Score</p>
-          <p className="mt-1 text-2xl font-bold font-mono text-white">
-            {scores.rubric > 0 ? "+" : ""}
-            {scores.rubric}
-            <span className="ml-2 text-sm text-gray-500">
-              / {component_data.max_possible}
-            </span>
-          </p>
-          <div className="mt-2 h-1.5 rounded-full bg-gray-800">
-            <div
-              className="h-1.5 rounded-full bg-brand"
-              style={{
-                width: `${((scores.rubric - component_data.min_possible) / (component_data.max_possible - component_data.min_possible)) * 100}%`,
-              }}
-            />
-          </div>
-        </div>
       </div>
 
       {/* Risks */}
@@ -218,9 +192,8 @@ export default function IndustryDetail() {
             <tr className="border-b border-gray-800 text-left text-xs uppercase text-gray-500">
               <th className="px-4 py-2">Indicator</th>
               <th className="px-4 py-2 text-right">Value</th>
-              <th className="px-4 py-2 text-right">Threshold</th>
               <th className="px-4 py-2 text-center">Favorable When</th>
-              <th className="px-4 py-2 text-center">Signal</th>
+              <th className="px-4 py-2 text-right">Score</th>
             </tr>
           </thead>
           <tbody>
@@ -235,18 +208,11 @@ export default function IndustryDetail() {
                 <td className="px-4 py-2 text-right font-mono text-gray-300">
                   {formatValue(s.indicator, s.value)}
                 </td>
-                <td className="px-4 py-2 text-right font-mono text-gray-500">
-                  {formatValue(s.indicator, s.threshold)}
-                </td>
                 <td className="px-4 py-2 text-center text-gray-500">
                   {s.favorable_when}
                 </td>
-                <td className="px-4 py-2 text-center">
-                  <span
-                    className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-sm font-bold ${signalColor(s.signal)}`}
-                  >
-                    {signalIcon(s.signal)}
-                  </span>
+                <td className={`px-4 py-2 text-right font-mono font-bold ${scoreColor(s.score)}`}>
+                  {s.score.toFixed(1)}
                 </td>
               </tr>
             ))}
