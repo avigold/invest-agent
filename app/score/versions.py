@@ -66,7 +66,7 @@ MACRO_ABSOLUTE_THRESHOLDS: dict[str, dict] = {
     "govt_debt_gdp":      {"floor": 20.0,  "ceiling": 200.0, "higher_is_better": False},
     "current_account_gdp":{"floor": -8.0,  "ceiling": 10.0,  "higher_is_better": True},
     "fdi_gdp":            {"floor": -1.0,  "ceiling": 8.0,   "higher_is_better": True},
-    "reserves":           {"floor": 0.0,   "ceiling": 500.0, "higher_is_better": True},  # billions USD
+    "reserves":           {"floor": 0.0,   "ceiling": 500_000_000_000, "higher_is_better": True},  # USD (raw)
 }
 
 # Market metrics (shared by country and company)

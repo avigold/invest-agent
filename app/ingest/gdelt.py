@@ -1,11 +1,12 @@
 """GDELT political stability ingest via DOC 2.0 API.
 
-Fetches instability-themed article volume per country from the GDELT DOC API,
-computes a monthly average, and inverts it to a 0-1 stability value.
+Fetches instability-themed article volume AND total article volume per country,
+computes the instability *ratio* (instability / total), and inverts to a 0-1
+stability value.  This corrects for English-language media volume bias — the US
+generates far more English articles than Switzerland, but if the same fraction
+of each country's coverage is about instability, they score the same.
 
 Themes queried: PROTEST, ARMEDCONFLICT, TERROR, POLITICAL_TURMOIL.
-The "Volume Intensity" metric is already normalized by total global article
-volume, so values are directly comparable across countries and time.
 """
 from __future__ import annotations
 
@@ -34,6 +35,8 @@ _INSTABILITY_QUERY = (
     "sourcecountry:{fips} "
     "(theme:PROTEST OR theme:ARMEDCONFLICT OR theme:TERROR OR theme:POLITICAL_TURMOIL)"
 )
+
+_TOTAL_QUERY = "sourcecountry:{fips}"
 
 _FALLBACK_VALUE = 0.5
 
@@ -78,12 +81,11 @@ def _parse_csv_and_average(csv_text: str, target_month: date) -> float | None:
     return sum(values) / len(values)
 
 
-async def _fetch_gdelt_csv(client: httpx.AsyncClient, fips_code: str) -> str:
-    """Fetch instability timeline CSV from GDELT DOC API.
-
-    Uses params= for proper URL encoding of the query with parentheses.
-    """
-    query = _INSTABILITY_QUERY.format(fips=fips_code)
+async def _fetch_gdelt_csv(
+    client: httpx.AsyncClient,
+    query: str,
+) -> str:
+    """Fetch a timeline volume CSV from GDELT DOC API."""
     resp = await client.get(
         _DOC_API_URL,
         params={
@@ -97,6 +99,30 @@ async def _fetch_gdelt_csv(client: httpx.AsyncClient, fips_code: str) -> str:
     return resp.text
 
 
+async def _fetch_with_retries(
+    client: httpx.AsyncClient,
+    query: str,
+    label: str,
+    log_fn: Callable[[str], None],
+) -> str | None:
+    """Fetch a GDELT CSV with up to 3 retries."""
+    last_err: Exception | None = None
+    for attempt in range(3):
+        try:
+            return await _fetch_gdelt_csv(client, query)
+        except Exception as e:
+            last_err = e
+            if attempt < 2:
+                log_fn(f"  GDELT {label}: attempt {attempt + 1} failed ({e}), retrying...")
+                await asyncio.sleep(5)
+    log_fn(f"  GDELT {label}: all attempts failed ({last_err})")
+    return None
+
+
+def _is_valid_csv(text: str | None) -> bool:
+    return bool(text and text.lstrip("\ufeff").startswith("Date"))
+
+
 async def ingest_gdelt_stability(
     db: AsyncSession,
     artefact_store: ArtefactStore,
@@ -105,63 +131,83 @@ async def ingest_gdelt_stability(
     as_of: date,
     log_fn: Callable[[str], None],
 ) -> list[uuid.UUID]:
-    """Fetch instability data from GDELT DOC API, compute stability score.
+    """Fetch instability ratio from GDELT DOC API, compute stability score.
 
-    stability_value = 1.0 - normalized_instability, clamped to [0, 1].
+    Makes two queries per country:
+    1. Instability-themed article volume
+    2. Total article volume (all themes)
+
+    stability_value = 1.0 - (instability_vol / total_vol), clamped to [0, 1].
     Falls back to 0.5 if the API is unreachable or returns no data.
     """
     fips = _ISO2_TO_FIPS.get(country.iso2, country.iso2)
+    instability_query = _INSTABILITY_QUERY.format(fips=fips)
+    total_query = _TOTAL_QUERY.format(fips=fips)
 
-    csv_text: str | None = None
+    instability_csv: str | None = None
+    total_csv: str | None = None
+
     try:
         async with httpx.AsyncClient(timeout=90) as client:
-            # Retry up to 2 times — GDELT API is slow and intermittent
-            last_err: Exception | None = None
-            for attempt in range(3):
-                try:
-                    csv_text = await _fetch_gdelt_csv(client, fips)
-                    break
-                except Exception as e:
-                    last_err = e
-                    if attempt < 2:
-                        log_fn(f"  GDELT: {country.iso2} — attempt {attempt + 1} failed ({e}), retrying...")
-                        await asyncio.sleep(5)
-            else:
-                raise last_err  # type: ignore[misc]
+            instability_csv = await _fetch_with_retries(
+                client, instability_query, f"{country.iso2} instability", log_fn,
+            )
+            # Brief pause between the two queries
+            await asyncio.sleep(2)
+            total_csv = await _fetch_with_retries(
+                client, total_query, f"{country.iso2} total", log_fn,
+            )
     except Exception as e:
-        log_fn(f"  GDELT: {country.iso2} — API error: {e}, using fallback")
-        logger.warning("GDELT fetch failed for %s: %s", country.iso2, e)
+        log_fn(f"  GDELT: {country.iso2} — client error: {e}, using fallback")
+        logger.warning("GDELT client error for %s: %s", country.iso2, e)
 
-    if csv_text and csv_text.lstrip("\ufeff").startswith("Date"):
-        monthly_instability = _parse_csv_and_average(csv_text, as_of)
-    else:
-        # Got HTML or garbage instead of CSV
-        if csv_text:
-            log_fn(f"  GDELT: {country.iso2} — got non-CSV response, using fallback")
-        monthly_instability = None
+    # Parse both CSVs
+    instability_vol = (
+        _parse_csv_and_average(instability_csv, as_of)
+        if _is_valid_csv(instability_csv)
+        else None
+    )
+    total_vol = (
+        _parse_csv_and_average(total_csv, as_of)
+        if _is_valid_csv(total_csv)
+        else None
+    )
 
-    if monthly_instability is not None:
-        # Instability is a volume percentage (typically 0-10 range).
-        # Normalize to 0-1 by dividing by a reasonable cap, then invert.
-        cap = 10.0
-        normalized = min(monthly_instability / cap, 1.0)
+    if instability_vol is not None and total_vol is not None and total_vol > 0:
+        # Ratio: what fraction of this country's coverage is instability-themed
+        instability_ratio = instability_vol / total_vol
+        # Typical range is 0.01 - 0.15.  Cap at 0.20 and map to 0-1.
+        cap = 0.20
+        normalized = min(instability_ratio / cap, 1.0)
         stability_value = max(1.0 - normalized, 0.0)
         log_fn(
             f"  GDELT stability: {country.iso2} = {stability_value:.3f}"
-            f" (instability_vol={monthly_instability:.3f})"
+            f" (instability_vol={instability_vol:.3f},"
+            f" total_vol={total_vol:.3f},"
+            f" ratio={instability_ratio:.4f})"
         )
     else:
         stability_value = _FALLBACK_VALUE
-        log_fn(f"  GDELT stability: {country.iso2} = {stability_value} (fallback, no data)")
+        reason = "no data"
+        if instability_csv and not _is_valid_csv(instability_csv):
+            reason = "non-CSV instability response"
+        elif total_csv and not _is_valid_csv(total_csv):
+            reason = "non-CSV total response"
+        log_fn(f"  GDELT stability: {country.iso2} = {stability_value} (fallback, {reason})")
 
     # Build source URL for evidence chain (human-readable)
-    source_url = f"{_DOC_API_URL}?query={_INSTABILITY_QUERY.format(fips=fips)}&mode=timelinevol&format=csv&TIMESPAN=3m"
+    source_url = (
+        f"{_DOC_API_URL}?query={instability_query}&mode=timelinevol&format=csv&TIMESPAN=3m"
+    )
 
-    # Store the raw response as artefact
-    artefact_content = csv_text if csv_text else json.dumps({
-        "fallback": True,
+    # Store the raw responses as artefact
+    artefact_content = json.dumps({
+        "instability_csv": instability_csv,
+        "total_csv": total_csv,
+        "instability_vol": instability_vol,
+        "total_vol": total_vol,
+        "stability_value": stability_value,
         "iso2": country.iso2,
-        "value": stability_value,
     })
 
     artefact = await artefact_store.store(

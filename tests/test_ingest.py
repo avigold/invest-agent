@@ -183,6 +183,16 @@ _SAMPLE_GDELT_CSV = """Date,Series,Value
 2026-02-03,Volume Intensity,1.0
 """
 
+# Total volume CSV — higher than instability, representing all articles
+_SAMPLE_GDELT_TOTAL_CSV = """Date,Series,Value
+2026-01-15,Volume Intensity,50.0
+2026-01-16,Volume Intensity,55.0
+2026-01-17,Volume Intensity,45.0
+2026-02-01,Volume Intensity,30.0
+2026-02-02,Volume Intensity,35.0
+2026-02-03,Volume Intensity,25.0
+"""
+
 
 def test_parse_csv_and_average_filters_by_month():
     """Should average only values from the target month."""
@@ -201,7 +211,7 @@ def test_parse_csv_and_average_returns_none_for_missing_month():
 
 @pytest.mark.asyncio
 async def test_gdelt_ingest_with_real_data():
-    """GDELT ingest should fetch CSV, compute stability, and store artefact."""
+    """GDELT ingest should fetch both CSVs, compute ratio-based stability."""
     mock_artefact = MagicMock()
     mock_artefact.id = uuid.uuid4()
 
@@ -226,9 +236,9 @@ async def test_gdelt_ingest_with_real_data():
 
     logs: list[str] = []
 
-    # Mock _fetch_gdelt_csv to return sample CSV
+    # Mock returns instability CSV first, then total CSV
     with patch("app.ingest.gdelt._fetch_gdelt_csv", new_callable=AsyncMock) as mock_fetch:
-        mock_fetch.return_value = _SAMPLE_GDELT_CSV
+        mock_fetch.side_effect = [_SAMPLE_GDELT_CSV, _SAMPLE_GDELT_TOTAL_CSV]
 
         ids = await ingest_gdelt_stability(
             db=db,
@@ -242,14 +252,19 @@ async def test_gdelt_ingest_with_real_data():
     assert ids == [mock_artefact.id]
     mock_store.store.assert_awaited_once()
 
-    # Verify artefact content is the raw CSV (not a stub JSON)
+    # Verify artefact is JSON containing both CSVs
     call_kwargs = mock_store.store.call_args[1]
-    assert call_kwargs["content"] == _SAMPLE_GDELT_CSV
+    import json
+    content = json.loads(call_kwargs["content"])
+    assert content["instability_csv"] is not None
+    assert content["total_csv"] is not None
     assert "api.gdeltproject.org" in call_kwargs["source_url"]
 
-    # Verify stability was computed: mean instability for Feb = 1.5
-    # stability = 1.0 - (1.5 / 10.0) = 0.85
-    assert any("0.850" in log for log in logs)
+    # Verify ratio-based stability:
+    # Feb instability mean = 1.5, Feb total mean = 30.0
+    # ratio = 1.5 / 30.0 = 0.05, normalized = 0.05 / 0.20 = 0.25
+    # stability = 1.0 - 0.25 = 0.75
+    assert any("0.750" in log for log in logs)
 
 
 @pytest.mark.asyncio
