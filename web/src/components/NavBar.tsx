@@ -46,6 +46,11 @@ export default function NavBar() {
                 {l.label}
               </Link>
             ))}
+            {user.role === "admin" && (
+              <Link to="/admin" className="text-sm text-purple-400 hover:text-purple-300">
+                Admin
+              </Link>
+            )}
           </div>
         )}
 
@@ -107,6 +112,15 @@ export default function NavBar() {
                   {l.label}
                 </Link>
               ))}
+              {user.role === "admin" && (
+                <Link
+                  to="/admin"
+                  onClick={() => setOpen(false)}
+                  className="rounded-lg px-3 py-2 text-sm text-purple-400 hover:bg-gray-800 hover:text-purple-300"
+                >
+                  Admin
+                </Link>
+              )}
             </div>
           )}
           <div className="mt-3 border-t border-gray-800 pt-3">

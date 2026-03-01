@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.api.routes_admin import router as admin_router
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
 from app.api.routes_companies import router as companies_router
@@ -89,6 +90,7 @@ def create_app() -> FastAPI:
     app.include_router(company_search_router)
     app.include_router(recommendations_router)
     app.include_router(scoring_profiles_router)
+    app.include_router(admin_router)
 
     # Serve built frontend in production (when web/dist/ exists)
     dist_dir = Path(__file__).resolve().parent.parent / "web" / "dist"

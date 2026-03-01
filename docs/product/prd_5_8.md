@@ -1,6 +1,6 @@
 # PRD 5.8 — Custom Scoring Profiles
 
-**Status**: In Progress
+**Status**: Complete
 **Depends on**: PRD 5.0 (recommendations), PRD 5.7 (recommendation detail)
 
 ## Overview
