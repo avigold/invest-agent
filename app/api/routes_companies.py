@@ -1,7 +1,10 @@
 """Company API endpoints."""
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,11 +12,14 @@ from app.api.deps import get_current_user
 from app.db.models import (
     Company,
     CompanyScore,
+    CompanySeries,
+    CompanySeriesPoint,
     DecisionPacket,
     User,
 )
 from app.db.session import get_db
 from app.score.versions import COMPANY_CALC_VERSION, COMPANY_SUMMARY_VERSION
+from app.utils.market_hours import get_market_status
 
 router = APIRouter(prefix="/v1", tags=["companies"])
 
@@ -130,3 +136,105 @@ async def company_summary(
     if not include_evidence:
         content["evidence"] = None
     return content
+
+
+PERIOD_DAYS = {
+    "1w": 7,
+    "1m": 30,
+    "3m": 90,
+    "6m": 180,
+    "1y": 365,
+    "5y": 1825,
+}
+
+
+@router.get("/company/{ticker}/chart")
+async def company_chart(
+    ticker: str,
+    period: str = Query("1y", description="Time period: 1w, 1m, 3m, 6m, 1y, 5y"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return historical price data for charting."""
+    if period not in PERIOD_DAYS:
+        raise HTTPException(status_code=400, detail=f"Invalid period '{period}'. Must be one of: {', '.join(PERIOD_DAYS)}")
+
+    result = await db.execute(
+        select(Company).where(Company.ticker == ticker.upper())
+    )
+    company = result.scalar_one_or_none()
+    if company is None:
+        raise HTTPException(status_code=404, detail=f"Company '{ticker}' not found")
+
+    # Find the equity_close series
+    result = await db.execute(
+        select(CompanySeries).where(
+            CompanySeries.company_id == company.id,
+            CompanySeries.series_name == "equity_close",
+        )
+    )
+    series = result.scalar_one_or_none()
+    if series is None:
+        return JSONResponse(
+            content={
+                "ticker": company.ticker,
+                "currency": "USD",
+                "period": period,
+                "points": [],
+                "latest": None,
+                "market_status": get_market_status(company.country_iso2),
+            },
+            headers={"Cache-Control": "private, max-age=3600"},
+        )
+
+    start_date = date.today() - timedelta(days=PERIOD_DAYS[period])
+    result = await db.execute(
+        select(CompanySeriesPoint)
+        .where(
+            CompanySeriesPoint.series_id == series.id,
+            CompanySeriesPoint.date >= start_date,
+        )
+        .order_by(CompanySeriesPoint.date.asc())
+    )
+    points = result.scalars().all()
+
+    points_list = [{"date": str(p.date), "value": float(p.value)} for p in points]
+
+    # Compute latest change
+    latest = None
+    if len(points) >= 2:
+        last = points[-1]
+        prev = points[-2]
+        change = float(last.value) - float(prev.value)
+        pct = change / float(prev.value) if float(prev.value) != 0 else 0
+        latest = {
+            "date": str(last.date),
+            "value": float(last.value),
+            "change_1d": round(change, 4),
+            "change_1d_pct": round(pct, 6),
+            "prev_close": float(prev.value),
+        }
+    elif len(points) == 1:
+        last = points[0]
+        latest = {
+            "date": str(last.date),
+            "value": float(last.value),
+            "change_1d": 0,
+            "change_1d_pct": 0,
+            "prev_close": float(last.value),
+        }
+
+    market_status = get_market_status(company.country_iso2)
+    cache_max_age = 30 if market_status["is_open"] else 3600
+
+    return JSONResponse(
+        content={
+            "ticker": company.ticker,
+            "currency": "USD",
+            "period": period,
+            "points": points_list,
+            "latest": latest,
+            "market_status": market_status,
+        },
+        headers={"Cache-Control": f"private, max-age={cache_max_age}"},
+    )

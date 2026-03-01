@@ -92,20 +92,37 @@ export default function Companies() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Companies</h1>
-        <div className="flex items-center gap-3">
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold text-white">Companies</h1>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/companies/add"
+              className="rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700"
+            >
+              + Add
+            </Link>
+            <button
+              onClick={submitRefresh}
+              disabled={submitting}
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+            >
+              {submitting ? "Submitting..." : "Refresh"}
+            </button>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name or ticker..."
-            className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 placeholder-gray-500 w-52"
+            className="min-w-0 flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 placeholder-gray-500 sm:flex-none sm:w-52"
           />
           <select
             value={countryFilter}
             onChange={(e) => setCountryFilter(e.target.value)}
-            className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300"
+            className="min-w-0 flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 sm:flex-none"
           >
             <option value="">All countries</option>
             {COUNTRIES.map((c) => (
@@ -117,7 +134,7 @@ export default function Companies() {
           <select
             value={sectorFilter}
             onChange={(e) => setSectorFilter(e.target.value)}
-            className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300"
+            className="min-w-0 flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 sm:flex-none"
           >
             <option value="">All sectors</option>
             {GICS_SECTORS.map((s) => (
@@ -126,19 +143,6 @@ export default function Companies() {
               </option>
             ))}
           </select>
-          <Link
-            to="/companies/add"
-            className="rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700"
-          >
-            + Add Companies
-          </Link>
-          <button
-            onClick={submitRefresh}
-            disabled={submitting}
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
-          >
-            {submitting ? "Submitting..." : "Refresh Companies"}
-          </button>
         </div>
       </div>
 

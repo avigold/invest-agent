@@ -20,25 +20,32 @@ export default function App() {
   return (
     <>
       <NavBar />
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <Suspense fallback={<div className="text-gray-500">Loading...</div>}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/countries" element={<Countries />} />
-            <Route path="/countries/:iso2" element={<CountryDetail />} />
-            <Route path="/recommendations" element={<Recommendations />} />
-            <Route path="/companies" element={<Companies />} />
-            <Route path="/companies/add" element={<AddCompanies />} />
-            <Route path="/companies/:ticker" element={<CompanyDetail />} />
-            <Route path="/industries" element={<Industries />} />
-            <Route path="/industries/:gics_code" element={<IndustryDetail />} />
-            <Route path="/jobs" element={<Jobs />} />
-            <Route path="/jobs/:id" element={<JobDetail />} />
-          </Routes>
-        </Suspense>
-      </main>
+      <Suspense fallback={<div className="mx-auto max-w-6xl px-4 py-8 text-gray-500">Loading...</div>}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route
+            path="*"
+            element={
+              <main className="mx-auto max-w-6xl px-4 py-8">
+                <Routes>
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/countries" element={<Countries />} />
+                  <Route path="/countries/:iso2" element={<CountryDetail />} />
+                  <Route path="/recommendations" element={<Recommendations />} />
+                  <Route path="/companies" element={<Companies />} />
+                  <Route path="/companies/add" element={<AddCompanies />} />
+                  <Route path="/companies/:ticker" element={<CompanyDetail />} />
+                  <Route path="/industries" element={<Industries />} />
+                  <Route path="/industries/:gics_code" element={<IndustryDetail />} />
+                  <Route path="/jobs" element={<Jobs />} />
+                  <Route path="/jobs/:id" element={<JobDetail />} />
+                </Routes>
+              </main>
+            }
+          />
+        </Routes>
+      </Suspense>
     </>
   );
 }

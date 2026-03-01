@@ -113,18 +113,18 @@ export default function Recommendations() {
         </div>
       )}
 
-      <div className="mb-4 flex items-center gap-3">
+      <div className="mb-4 flex flex-wrap gap-2">
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by name or ticker..."
-          className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 placeholder-gray-500 w-52"
+          className="min-w-0 flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 placeholder-gray-500 sm:flex-none sm:w-52"
         />
         <select
           value={classFilter}
           onChange={(e) => setClassFilter(e.target.value)}
-          className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300"
+          className="min-w-0 flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 sm:flex-none"
         >
           <option value="">All signals</option>
           <option value="Buy">Buy</option>
@@ -134,7 +134,7 @@ export default function Recommendations() {
         <select
           value={countryFilter}
           onChange={(e) => setCountryFilter(e.target.value)}
-          className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300"
+          className="min-w-0 flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 sm:flex-none"
         >
           <option value="">All countries</option>
           {COUNTRIES.map((c) => (
@@ -146,7 +146,7 @@ export default function Recommendations() {
         <select
           value={sectorFilter}
           onChange={(e) => setSectorFilter(e.target.value)}
-          className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300"
+          className="min-w-0 flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 sm:flex-none"
         >
           <option value="">All sectors</option>
           {GICS_SECTORS.map((s) => (

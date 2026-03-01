@@ -77,12 +77,15 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="mb-8">
+      <div className="mb-8 rounded-xl border border-gray-800 p-6" style={{ background: "linear-gradient(135deg, #0a1525 0%, #040a18 100%)" }}>
+        <p className="text-brand text-xs font-mono uppercase tracking-widest mb-2 select-none">
+          Dashboard
+        </p>
         <h1 className="text-2xl font-bold text-white">
           Welcome, {user.name}
         </h1>
-        <p className="text-gray-400">
-          Plan: <span className="uppercase">{user.plan}</span>
+        <p className="text-gray-500 text-sm mt-1">
+          Plan: <span className="uppercase font-medium text-gray-400">{user.plan}</span>
         </p>
       </div>
 

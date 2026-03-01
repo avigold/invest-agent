@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
 import ScoreCard from "@/components/ScoreCard";
+import StockChart from "@/components/StockChart";
 
 interface Risk {
   type: string;
@@ -160,6 +161,9 @@ export default function CompanyDetail() {
           </span>
         </div>
       </div>
+
+      {/* Stock chart */}
+      <StockChart ticker={packet.ticker} />
 
       {/* Score cards */}
       <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-3">

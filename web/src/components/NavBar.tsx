@@ -18,8 +18,20 @@ export default function NavBar() {
     <nav className="border-b border-gray-800 bg-gray-900">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         {/* Logo */}
-        <Link to="/dashboard" className="text-lg font-bold text-white">
-          Invest Agent
+        <Link to="/dashboard" className="flex items-center gap-2 shrink-0 group">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <polyline
+              points="2,15 8,7 11,12 18,3"
+              stroke="#6b7280"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="group-hover:stroke-gray-300 transition-colors"
+            />
+          </svg>
+          <span className="text-lg font-bold text-gray-300 tracking-tight group-hover:text-white transition-colors">
+            Invest Agent
+          </span>
         </Link>
 
         {/* Desktop nav */}
