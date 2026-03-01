@@ -31,10 +31,9 @@ env/
 .DS_Store
 Thumbs.db
 
-# Node / Next.js
+# Node / Vite
 node_modules/
-.next/
-out/
+web/dist/
 
 # Testing
 .coverage

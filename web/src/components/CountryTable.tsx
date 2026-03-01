@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "react-router-dom";
 
 function scoreColor(score: number): string {
   if (score >= 60) return "text-green-400";
@@ -67,7 +67,7 @@ export default function CountryTable({
               </td>
               <td className="px-4 py-3">
                 <Link
-                  href={`/countries/${c.iso2}`}
+                  to={`/countries/${c.iso2}`}
                   className="text-white hover:text-brand transition-colors"
                 >
                   {c.name}

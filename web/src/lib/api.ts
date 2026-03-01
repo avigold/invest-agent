@@ -8,7 +8,7 @@ export async function apiFetch(
     ...options,
     credentials: "include",
   });
-  if (res.status === 401 && typeof window !== "undefined") {
+  if (res.status === 401) {
     window.location.href = "/login";
     throw new Error("Unauthorized");
   }

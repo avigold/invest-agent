@@ -1,6 +1,4 @@
-"use client";
-
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import StatusBadge from "./StatusBadge";
 import { apiJson } from "@/lib/api";
 
@@ -82,7 +80,7 @@ export default function JobsTable({ jobs, onRefresh }: JobsTableProps) {
             >
               <td className="px-4 py-3">
                 <Link
-                  href={`/jobs/${job.id}`}
+                  to={`/jobs/${job.id}`}
                   className="text-brand hover:underline"
                 >
                   {job.command}

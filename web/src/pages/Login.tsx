@@ -1,9 +1,7 @@
-"use client";
-
 import { useState } from "react";
 import { apiJson } from "@/lib/api";
 
-export default function LoginPage() {
+export default function Login() {
   const [loading, setLoading] = useState(false);
 
   const handleGoogleLogin = async () => {

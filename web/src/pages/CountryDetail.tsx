@@ -1,8 +1,5 @@
-"use client";
-
 import { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
-import Link from "next/link";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
 import ScoreCard from "@/components/ScoreCard";
@@ -84,17 +81,17 @@ function rankColor(rank: number, total: number): string {
   return "text-red-400";
 }
 
-export default function CountryDetailPage() {
+export default function CountryDetail() {
   const { user, loading } = useUser();
-  const router = useRouter();
-  const params = useParams();
-  const iso2 = (params.iso2 as string)?.toUpperCase();
+  const navigate = useNavigate();
+  const { iso2: rawIso2 } = useParams<{ iso2: string }>();
+  const iso2 = rawIso2?.toUpperCase() || "";
   const [packet, setPacket] = useState<CountryPacket | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/login");
-  }, [user, loading, router]);
+    if (!loading && !user) navigate("/login", { replace: true });
+  }, [user, loading, navigate]);
 
   useEffect(() => {
     if (user && iso2) {
@@ -111,7 +108,7 @@ export default function CountryDetailPage() {
   if (error) {
     return (
       <div>
-        <Link href="/countries" className="mb-4 inline-block text-sm text-brand hover:underline">
+        <Link to="/countries" className="mb-4 inline-block text-sm text-brand hover:underline">
           &larr; Back to Countries
         </Link>
         <div className="rounded border border-red-800 bg-red-900/30 px-4 py-3 text-red-300">
@@ -131,7 +128,7 @@ export default function CountryDetailPage() {
 
   return (
     <div>
-      <Link href="/countries" className="mb-6 inline-block text-sm text-gray-400 hover:text-white">
+      <Link to="/countries" className="mb-6 inline-block text-sm text-gray-400 hover:text-white">
         &larr; All countries
       </Link>
 
@@ -197,7 +194,7 @@ export default function CountryDetailPage() {
                       {meta?.label || key.replace(/_/g, " ")}
                     </span>
                     <span className="font-mono text-sm font-medium text-white">
-                      {val != null && meta ? meta.format(val) : val != null ? String(val) : "—"}
+                      {val != null && meta ? meta.format(val) : val != null ? String(val) : "\u2014"}
                     </span>
                   </div>
                 );
@@ -220,7 +217,7 @@ export default function CountryDetailPage() {
                       {meta?.label || key.replace(/_/g, " ")}
                     </span>
                     <span className={`font-mono text-sm font-medium ${isNeg ? "text-red-400" : "text-white"}`}>
-                      {val != null && meta ? meta.format(val) : val != null ? String(val) : "—"}
+                      {val != null && meta ? meta.format(val) : val != null ? String(val) : "\u2014"}
                     </span>
                   </div>
                 );

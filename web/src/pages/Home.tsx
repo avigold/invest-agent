@@ -1,19 +1,16 @@
-"use client";
-
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { useNavigate, Link } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 
 export default function Home() {
   const { user, loading } = useUser();
-  const router = useRouter();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace("/dashboard");
+      navigate("/dashboard", { replace: true });
     }
-  }, [user, loading, router]);
+  }, [user, loading, navigate]);
 
   if (loading) return null;
 
@@ -25,7 +22,7 @@ export default function Home() {
         Compute deterministic scores. Make better decisions.
       </p>
       <Link
-        href="/login"
+        to="/login"
         className="rounded-lg bg-brand px-6 py-3 text-lg font-medium text-white hover:bg-brand-dark"
       >
         Get started

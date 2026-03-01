@@ -1,45 +1,53 @@
-"use client";
-
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
-import CountryTable, { CountryRow } from "@/components/CountryTable";
+import JobsTable, { JobRow } from "@/components/JobsTable";
 
-export default function CountriesPage() {
+export default function Jobs() {
   const { user, loading } = useUser();
-  const router = useRouter();
-  const [countries, setCountries] = useState<CountryRow[]>([]);
+  const navigate = useNavigate();
+  const [jobs, setJobs] = useState<JobRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/login");
-  }, [user, loading, router]);
+    if (!loading && !user) navigate("/login", { replace: true });
+  }, [user, loading, navigate]);
 
-  const loadCountries = () => {
-    apiJson<CountryRow[]>("/v1/countries")
-      .then(setCountries)
+  const loadJobs = () => {
+    apiJson<JobRow[]>("/api/jobs")
+      .then(setJobs)
       .catch(() => {});
   };
 
   useEffect(() => {
-    if (user) loadCountries();
+    if (user) loadJobs();
   }, [user]);
 
-  const submitRefresh = async () => {
+  // Poll for updates when there are running/queued jobs
+  useEffect(() => {
+    const hasActive = jobs.some(
+      (j) => j.status === "running" || j.status === "queued"
+    );
+    if (!hasActive) return;
+    const id = setInterval(loadJobs, 3000);
+    return () => clearInterval(id);
+  }, [jobs]);
+
+  const submitEchoJob = async () => {
     setSubmitting(true);
     setError("");
     try {
-      const result = await apiJson<{ id: string }>("/api/jobs", {
+      await apiJson("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          command: "country_refresh",
-          params: {},
+          command: "echo",
+          params: { message: "Hello from Invest Agent" },
         }),
       });
-      router.push(`/jobs/${result.id}`);
+      loadJobs();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to submit job");
     } finally {
@@ -52,13 +60,13 @@ export default function CountriesPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Countries</h1>
+        <h1 className="text-2xl font-bold text-white">Jobs</h1>
         <button
-          onClick={submitRefresh}
+          onClick={submitEchoJob}
           disabled={submitting}
           className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
         >
-          {submitting ? "Submitting..." : "Refresh Countries"}
+          {submitting ? "Submitting..." : "Run echo job"}
         </button>
       </div>
 
@@ -69,7 +77,7 @@ export default function CountriesPage() {
       )}
 
       <div className="rounded-lg border border-gray-800 bg-gray-900">
-        <CountryTable countries={countries} />
+        <JobsTable jobs={jobs} onRefresh={loadJobs} />
       </div>
     </div>
   );

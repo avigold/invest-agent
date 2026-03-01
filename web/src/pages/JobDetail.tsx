@@ -1,14 +1,11 @@
-"use client";
-
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
 import StatusBadge from "@/components/StatusBadge";
 import LogViewer from "@/components/LogViewer";
 
-interface JobDetail {
+interface JobDetailData {
   id: string;
   command: string;
   params: Record<string, unknown>;
@@ -20,20 +17,20 @@ interface JobDetail {
   queue_position: number | null;
 }
 
-export default function JobDetailPage() {
+export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
   const { user, loading } = useUser();
-  const router = useRouter();
-  const [job, setJob] = useState<JobDetail | null>(null);
+  const navigate = useNavigate();
+  const [job, setJob] = useState<JobDetailData | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/login");
-  }, [user, loading, router]);
+    if (!loading && !user) navigate("/login", { replace: true });
+  }, [user, loading, navigate]);
 
   useEffect(() => {
     if (!user || !id) return;
-    apiJson<JobDetail>(`/api/jobs/${id}`)
+    apiJson<JobDetailData>(`/api/jobs/${id}`)
       .then(setJob)
       .catch(() => setError("Job not found"));
   }, [user, id]);
@@ -42,7 +39,7 @@ export default function JobDetailPage() {
   useEffect(() => {
     if (!job || !["running", "queued"].includes(job.status)) return;
     const interval = setInterval(() => {
-      apiJson<JobDetail>(`/api/jobs/${id}`)
+      apiJson<JobDetailData>(`/api/jobs/${id}`)
         .then(setJob)
         .catch(() => {});
     }, 3000);
@@ -52,7 +49,7 @@ export default function JobDetailPage() {
   const handleCancel = async () => {
     try {
       await apiJson(`/api/jobs/${id}/cancel`, { method: "POST" });
-      apiJson<JobDetail>(`/api/jobs/${id}`).then(setJob);
+      apiJson<JobDetailData>(`/api/jobs/${id}`).then(setJob);
     } catch {
       // ignore
     }
@@ -61,7 +58,7 @@ export default function JobDetailPage() {
   const handleDelete = async () => {
     try {
       await apiJson(`/api/jobs/${id}`, { method: "DELETE" });
-      router.push("/jobs");
+      navigate("/jobs");
     } catch {
       // ignore
     }
@@ -73,7 +70,7 @@ export default function JobDetailPage() {
     return (
       <div className="text-center">
         <p className="text-red-400">{error}</p>
-        <Link href="/jobs" className="text-brand hover:underline">
+        <Link to="/jobs" className="text-brand hover:underline">
           Back to jobs
         </Link>
       </div>
@@ -85,7 +82,7 @@ export default function JobDetailPage() {
   return (
     <div>
       <div className="mb-6">
-        <Link href="/jobs" className="text-sm text-gray-400 hover:text-white">
+        <Link to="/jobs" className="text-sm text-gray-400 hover:text-white">
           &larr; All jobs
         </Link>
       </div>
@@ -134,7 +131,7 @@ export default function JobDetailPage() {
           <p className="text-white">
             {job.started_at
               ? new Date(job.started_at).toLocaleString()
-              : "—"}
+              : "\u2014"}
           </p>
         </div>
         <div>
@@ -142,7 +139,7 @@ export default function JobDetailPage() {
           <p className="text-white">
             {job.finished_at
               ? new Date(job.finished_at).toLocaleString()
-              : "—"}
+              : "\u2014"}
           </p>
         </div>
       </div>

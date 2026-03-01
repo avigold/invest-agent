@@ -1,8 +1,5 @@
-"use client";
-
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
+import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
 import ScoreCard from "@/components/ScoreCard";
@@ -79,33 +76,30 @@ function formatValue(indicator: string, value: number | null): string {
   return `${value.toFixed(1)}%`;
 }
 
-export default function IndustryDetailPage({
-  params,
-}: {
-  params: { gics_code: string };
-}) {
+export default function IndustryDetail() {
   const { user, loading } = useUser();
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const { gics_code } = useParams<{ gics_code: string }>();
+  const [searchParams] = useSearchParams();
   const iso2 = searchParams.get("iso2") || "US";
   const [summary, setSummary] = useState<IndustrySummary | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/login");
-  }, [user, loading, router]);
+    if (!loading && !user) navigate("/login", { replace: true });
+  }, [user, loading, navigate]);
 
   useEffect(() => {
-    if (user) {
+    if (user && gics_code) {
       apiJson<IndustrySummary>(
-        `/v1/industry/${params.gics_code}/summary?iso2=${iso2}`
+        `/v1/industry/${gics_code}/summary?iso2=${iso2}`
       )
         .then(setSummary)
         .catch((e) =>
           setError(e instanceof Error ? e.message : "Failed to load")
         );
     }
-  }, [user, params.gics_code, iso2]);
+  }, [user, gics_code, iso2]);
 
   if (loading || !user) return null;
 
@@ -136,7 +130,7 @@ export default function IndustryDetailPage({
     <div>
       {/* Back link */}
       <Link
-        href="/industries"
+        to="/industries"
         className="mb-4 inline-block text-sm text-gray-400 hover:text-white"
       >
         &larr; All Industries
@@ -153,7 +147,7 @@ export default function IndustryDetailPage({
           </h1>
           <p className="mt-1 text-gray-400">
             <Link
-              href={`/countries/${summary.country_iso2}`}
+              to={`/countries/${summary.country_iso2}`}
               className="hover:text-white transition-colors"
             >
               {summary.country_name}

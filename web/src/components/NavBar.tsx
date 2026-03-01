@@ -1,6 +1,4 @@
-"use client";
-
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 
 export default function NavBar() {
@@ -10,31 +8,31 @@ export default function NavBar() {
     <nav className="border-b border-gray-800 bg-gray-900">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-6">
-          <Link href="/" className="text-lg font-bold text-white">
+          <Link to="/" className="text-lg font-bold text-white">
             Invest Agent
           </Link>
           {user && (
             <>
               <Link
-                href="/dashboard"
+                to="/dashboard"
                 className="text-sm text-gray-400 hover:text-white"
               >
                 Dashboard
               </Link>
               <Link
-                href="/countries"
+                to="/countries"
                 className="text-sm text-gray-400 hover:text-white"
               >
                 Countries
               </Link>
               <Link
-                href="/industries"
+                to="/industries"
                 className="text-sm text-gray-400 hover:text-white"
               >
                 Industries
               </Link>
               <Link
-                href="/jobs"
+                to="/jobs"
                 className="text-sm text-gray-400 hover:text-white"
               >
                 Jobs
@@ -58,7 +56,7 @@ export default function NavBar() {
             </>
           ) : (
             <Link
-              href="/login"
+              to="/login"
               className="rounded bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark"
             >
               Sign in

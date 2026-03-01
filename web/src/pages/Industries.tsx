@@ -1,22 +1,20 @@
-"use client";
-
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
 import IndustryTable, { IndustryRow } from "@/components/IndustryTable";
 
-export default function IndustriesPage() {
+export default function Industries() {
   const { user, loading } = useUser();
-  const router = useRouter();
+  const navigate = useNavigate();
   const [industries, setIndustries] = useState<IndustryRow[]>([]);
   const [countryFilter, setCountryFilter] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/login");
-  }, [user, loading, router]);
+    if (!loading && !user) navigate("/login", { replace: true });
+  }, [user, loading, navigate]);
 
   const loadIndustries = (iso2?: string) => {
     const params = iso2 ? `?iso2=${iso2}` : "";
@@ -41,7 +39,7 @@ export default function IndustriesPage() {
           params: {},
         }),
       });
-      router.push(`/jobs/${result.id}`);
+      navigate(`/jobs/${result.id}`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to submit job");
     } finally {
