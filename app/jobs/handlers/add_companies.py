@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.config import get_settings
 from app.db.models import Company, CompanyRiskRegister, CompanyScore
 from app.ingest.artefact_store import ArtefactStore
-from app.ingest.company_lookup import SECTickerCache
+from app.ingest.company_lookup import SECTickerCache, enrich_with_yfinance_async, map_sector_to_gics
 from app.ingest.seed_sources import seed_data_sources
 from app.ingest.sec_edgar import ingest_edgar_for_company
 from app.ingest.company_marketdata import ingest_market_data_for_company
@@ -68,6 +68,24 @@ async def add_companies_by_market_cap_handler(
     _log(job, f"Add companies by market cap: target={count}, as_of={as_of}")
 
     async with session_factory() as db:
+        # ── Phase 0: Backfill missing GICS codes ────────────────────────
+        result = await db.execute(
+            select(Company).where(Company.gics_code == "")
+        )
+        missing_gics = result.scalars().all()
+        if missing_gics:
+            _log(job, f"Backfilling GICS codes for {len(missing_gics)} companies...")
+            enriched = 0
+            for company in missing_gics:
+                info = await enrich_with_yfinance_async(company.ticker)
+                if info and info.get("sector"):
+                    gics = map_sector_to_gics(info["sector"])
+                    if gics:
+                        company.gics_code = gics
+                        enriched += 1
+            await db.commit()
+            _log(job, f"  Enriched {enriched}/{len(missing_gics)} GICS codes.")
+
         # ── Phase 1: Find and insert new companies ────────────────────────
 
         # 1. Get all tickers already in DB
@@ -168,6 +186,20 @@ async def add_companies_by_market_cap_handler(
             _log(job, "No new companies to process.")
             return
 
+        # ── Phase 1.5: Enrich GICS codes for new companies ──────────────
+        _log(job, "\nEnriching GICS codes for new companies...")
+        enriched_new = 0
+        for company in new_companies:
+            if not company.gics_code:
+                info = await enrich_with_yfinance_async(company.ticker)
+                if info and info.get("sector"):
+                    gics = map_sector_to_gics(info["sector"])
+                    if gics:
+                        company.gics_code = gics
+                        enriched_new += 1
+        await db.commit()
+        _log(job, f"  Enriched {enriched_new}/{len(new_companies)} GICS codes.")
+
         # ── Phase 2: Ingest + score the new companies ─────────────────────
 
         _log(job, "\n--- Ingesting data for new companies ---")
@@ -263,6 +295,16 @@ async def add_companies_by_market_cap_handler(
         await db.flush()
 
         _log(job, "\n--- Building Decision Packets ---")
+        # Load ALL scores for this as_of so ranks are global, not batch-relative
+        all_scores_result = await db.execute(
+            select(CompanyScore).where(
+                CompanyScore.as_of == as_of,
+                CompanyScore.calc_version == COMPANY_CALC_VERSION,
+            )
+        )
+        all_scores = list(all_scores_result.scalars().all())
+        _log(job, f"  Ranking against {len(all_scores)} total scored companies")
+
         packet_ids: list[str] = []
         for score in scores:
             company = next(c for c in new_companies if c.id == score.company_id)
@@ -272,7 +314,7 @@ async def add_companies_by_market_cap_handler(
                 company=company,
                 score=score,
                 risks=risks,
-                all_scores=scores,
+                all_scores=all_scores,
                 include_evidence=True,
             )
             packet_ids.append(str(packet.id))

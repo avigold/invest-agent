@@ -1,4 +1,4 @@
-"""Deterministic company scoring engine — fundamentals + market + industry context."""
+"""Deterministic company scoring engine — fundamentals + market."""
 from __future__ import annotations
 
 from datetime import date
@@ -14,9 +14,6 @@ from app.db.models import (
     CompanyScore,
     CompanySeries,
     CompanySeriesPoint,
-    Country,
-    Industry,
-    IndustryScore,
 )
 from app.score.absolute import absolute_score
 from app.score.country import (
@@ -30,7 +27,6 @@ from app.score.versions import (
     COMPANY_WEIGHTS_NO_FUNDAMENTALS,
     FUNDAMENTAL_ABSOLUTE_THRESHOLDS,
     FUNDAMENTAL_INDICATORS,
-    INDUSTRY_CALC_VERSION,
     MARKET_ABSOLUTE_THRESHOLDS,
 )
 
@@ -197,67 +193,6 @@ async def _load_equity_prices(
     return result
 
 
-async def _load_industry_context_scores(
-    db: AsyncSession,
-    companies: list[Company],
-    as_of: date,
-) -> dict[str, float]:
-    """Load the IndustryScore for each company's GICS sector in its own country.
-
-    Returns {ticker: industry_overall_score}. Defaults to 50.0 if unavailable.
-    """
-    result: dict[str, float] = {}
-
-    # Cache country lookups to avoid repeated queries
-    country_cache: dict[str, Country | None] = {}
-
-    for company in companies:
-        if not company.gics_code:
-            result[company.ticker] = 50.0
-            continue
-
-        # Look up the company's own country
-        iso2 = company.country_iso2
-        if iso2 not in country_cache:
-            country_result = await db.execute(
-                select(Country).where(Country.iso2 == iso2)
-            )
-            country_cache[iso2] = country_result.scalar_one_or_none()
-
-        country = country_cache[iso2]
-        if country is None:
-            result[company.ticker] = 50.0
-            continue
-
-        # Find industry by GICS code
-        ind_result = await db.execute(
-            select(Industry).where(Industry.gics_code == company.gics_code)
-        )
-        industry = ind_result.scalar_one_or_none()
-        if industry is None:
-            result[company.ticker] = 50.0
-            continue
-
-        # Find latest industry score for this industry + country
-        score_result = await db.execute(
-            select(IndustryScore)
-            .where(
-                IndustryScore.industry_id == industry.id,
-                IndustryScore.country_id == country.id,
-                IndustryScore.calc_version == INDUSTRY_CALC_VERSION,
-            )
-            .order_by(desc(IndustryScore.as_of))
-            .limit(1)
-        )
-        ind_score = score_result.scalar_one_or_none()
-        if ind_score is not None:
-            result[company.ticker] = float(ind_score.overall_score)
-        else:
-            result[company.ticker] = 50.0
-
-    return result
-
-
 async def _load_point_ids_for_company(
     db: AsyncSession,
     company: Company,
@@ -285,7 +220,6 @@ async def compute_company_scores(
     fundamentals = await _load_latest_fundamentals(db, companies)
     derived_ratios = _compute_derived_ratios(fundamentals)
     prices_data = await _load_equity_prices(db, companies)
-    industry_scores = await _load_industry_context_scores(db, companies, as_of)
 
     # Fundamental sub-scores
     fundamental_subscores = _compute_fundamental_subscores(derived_ratios)
@@ -317,13 +251,12 @@ async def compute_company_scores(
         t = company.ticker
         fund = fundamental_subscores.get(t, 50.0)
         mkt = market_subscores.get(t, 50.0)
-        ind_ctx = industry_scores.get(t, 50.0)
 
         # Detect if this company has no fundamental data
         has_fundamentals = bool(fundamentals.get(t))
         w = COMPANY_WEIGHTS if has_fundamentals else COMPANY_WEIGHTS_NO_FUNDAMENTALS
 
-        overall = fund * w["fundamental"] + mkt * w["market"] + ind_ctx * w["industry_context"]
+        overall = fund * w["fundamental"] + mkt * w["market"]
         overall = round(overall, 2)
 
         point_ids = await _load_point_ids_for_company(db, company)
@@ -331,7 +264,6 @@ async def compute_company_scores(
         component_data = {
             "fundamental_ratios": derived_ratios.get(t, {}),
             "market_metrics": market_metrics.get(t, {}),
-            "industry_context_score": ind_ctx,
         }
 
         score = CompanyScore(
@@ -340,14 +272,14 @@ async def compute_company_scores(
             calc_version=COMPANY_CALC_VERSION,
             fundamental_score=Decimal(str(fund)),
             market_score=Decimal(str(mkt)),
-            industry_context_score=Decimal(str(ind_ctx)),
+            industry_context_score=Decimal("0"),
             overall_score=Decimal(str(overall)),
             component_data=component_data,
             point_ids=point_ids,
         )
         scores.append(score)
 
-        log_fn(f"  {t}: overall={overall:.1f} (fund={fund:.1f}, mkt={mkt:.1f}, ind={ind_ctx:.1f})")
+        log_fn(f"  {t}: overall={overall:.1f} (fund={fund:.1f}, mkt={mkt:.1f})")
 
     return scores
 

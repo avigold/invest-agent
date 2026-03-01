@@ -172,3 +172,40 @@ def test_add_companies_job_command_enum():
     """ADD_COMPANIES_BY_MARKET_CAP should be in JobCommand enum."""
     from app.jobs.schemas import JobCommand
     assert JobCommand.ADD_COMPANIES_BY_MARKET_CAP == "add_companies_by_market_cap"
+
+
+# ---------------------------------------------------------------------------
+# PRD 5.4: Version bumps and weight validation
+# ---------------------------------------------------------------------------
+
+
+def test_company_weights_no_industry_context():
+    """COMPANY_WEIGHTS should not include industry_context (PRD 5.4)."""
+    from app.score.versions import COMPANY_WEIGHTS
+    assert "industry_context" not in COMPANY_WEIGHTS
+    assert set(COMPANY_WEIGHTS.keys()) == {"fundamental", "market"}
+
+
+def test_company_weights_sum_to_one():
+    """COMPANY_WEIGHTS values should sum to 1.0."""
+    from app.score.versions import COMPANY_WEIGHTS
+    assert abs(sum(COMPANY_WEIGHTS.values()) - 1.0) < 1e-9
+
+
+def test_company_weights_no_fundamentals_sum_to_one():
+    """COMPANY_WEIGHTS_NO_FUNDAMENTALS values should sum to 1.0."""
+    from app.score.versions import COMPANY_WEIGHTS_NO_FUNDAMENTALS
+    assert abs(sum(COMPANY_WEIGHTS_NO_FUNDAMENTALS.values()) - 1.0) < 1e-9
+    assert COMPANY_WEIGHTS_NO_FUNDAMENTALS["fundamental"] == 0.0
+
+
+def test_version_bumps_v3():
+    """Version constants should be bumped for PRD 5.4."""
+    from app.score.versions import (
+        COMPANY_CALC_VERSION,
+        COMPANY_SUMMARY_VERSION,
+        RECOMMENDATION_VERSION,
+    )
+    assert COMPANY_CALC_VERSION == "company_v3"
+    assert COMPANY_SUMMARY_VERSION == "company_summary_v3"
+    assert RECOMMENDATION_VERSION == "recommendation_v2"

@@ -32,14 +32,12 @@ interface CompanyPacket {
     overall: number;
     fundamental: number;
     market: number;
-    industry_context: number;
   };
   rank: number;
   rank_total: number;
   component_data: {
     fundamental_ratios?: Record<string, number | null>;
     market_metrics?: Record<string, number | null>;
-    industry_context_score?: number;
   };
   risks: Risk[];
   evidence: Evidence[] | null;
@@ -164,11 +162,10 @@ export default function CompanyDetail() {
       </div>
 
       {/* Score cards */}
-      <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-3">
         <ScoreCard label="Overall" score={scores.overall} />
-        <ScoreCard label="Fundamental (50%)" score={scores.fundamental} />
-        <ScoreCard label="Market (30%)" score={scores.market} />
-        <ScoreCard label="Industry Context (20%)" score={scores.industry_context} />
+        <ScoreCard label="Fundamental (60%)" score={scores.fundamental} />
+        <ScoreCard label="Market (40%)" score={scores.market} />
       </div>
 
       {/* Risks */}
@@ -235,14 +232,6 @@ export default function CompanyDetail() {
                   </div>
                 );
               })}
-              {component_data.industry_context_score != null && (
-                <div className="flex items-center justify-between px-4 py-2.5">
-                  <span className="text-sm text-gray-400">Industry Context Score</span>
-                  <span className="font-mono text-sm font-medium text-white">
-                    {component_data.industry_context_score.toFixed(1)}
-                  </span>
-                </div>
-              )}
             </div>
           </div>
         </div>

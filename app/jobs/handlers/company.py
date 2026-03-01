@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.config import get_settings
 from app.db.models import Company, CompanyRiskRegister, CompanyScore
 from app.ingest.artefact_store import ArtefactStore
+from app.ingest.company_lookup import enrich_with_yfinance_async, map_sector_to_gics
 from app.ingest.seed_sources import seed_data_sources
 from app.ingest.sec_edgar import ingest_edgar_for_company
 from app.ingest.company_marketdata import ingest_market_data_for_company
@@ -113,6 +114,21 @@ async def company_refresh_handler(
         if not companies:
             _log(job, f"No companies matched filter ticker={ticker_filter}")
             return
+
+        # Backfill missing GICS codes via yfinance
+        missing_gics = [c for c in companies if not c.gics_code]
+        if missing_gics:
+            _log(job, f"Backfilling GICS codes for {len(missing_gics)} companies...")
+            enriched = 0
+            for company in missing_gics:
+                info = await enrich_with_yfinance_async(company.ticker)
+                if info and info.get("sector"):
+                    gics = map_sector_to_gics(info["sector"])
+                    if gics:
+                        company.gics_code = gics
+                        enriched += 1
+            await db.commit()
+            _log(job, f"  Enriched {enriched}/{len(missing_gics)} GICS codes.")
 
         _log(job, f"Processing {len(companies)} companies...")
 

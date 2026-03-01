@@ -12,23 +12,21 @@ COUNTRY_WEIGHTS = {
     "stability": 0.10,
 }
 
-COMPANY_CALC_VERSION = "company_v2"
-COMPANY_SUMMARY_VERSION = "company_summary_v2"
+COMPANY_CALC_VERSION = "company_v3"
+COMPANY_SUMMARY_VERSION = "company_summary_v3"
 
 COMPANY_WEIGHTS = {
-    "fundamental": 0.50,
-    "market": 0.30,
-    "industry_context": 0.20,
+    "fundamental": 0.60,
+    "market": 0.40,
 }
 
 COMPANY_WEIGHTS_NO_FUNDAMENTALS = {
     "fundamental": 0.0,
-    "market": 0.60,
-    "industry_context": 0.40,
+    "market": 1.0,
 }
 
 # Recommendation constants
-RECOMMENDATION_VERSION = "recommendation_v1"
+RECOMMENDATION_VERSION = "recommendation_v2"
 RECOMMENDATION_WEIGHTS = {"country": 0.20, "industry": 0.20, "company": 0.60}
 RECOMMENDATION_THRESHOLDS = {"buy": 70, "sell": 40}
 
