@@ -7,9 +7,9 @@ INDUSTRY_CALC_VERSION = "industry_v2"
 INDUSTRY_SUMMARY_VERSION = "industry_summary_v2"
 
 COUNTRY_WEIGHTS = {
-    "macro": 0.45,
-    "market": 0.35,
-    "stability": 0.20,
+    "macro": 0.50,
+    "market": 0.40,
+    "stability": 0.10,
 }
 
 COMPANY_CALC_VERSION = "company_v2"

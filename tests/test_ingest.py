@@ -262,9 +262,9 @@ async def test_gdelt_ingest_with_real_data():
 
     # Verify ratio-based stability:
     # Feb instability mean = 1.5, Feb total mean = 30.0
-    # ratio = 1.5 / 30.0 = 0.05, normalized = 0.05 / 0.20 = 0.25
-    # stability = 1.0 - 0.25 = 0.75
-    assert any("0.750" in log for log in logs)
+    # ratio = 0.05, absolute_score(0.05, floor=0.05, ceiling=0.40, lower_is_better)
+    # At the floor → score=100, stored as 1.000
+    assert any("1.000" in log for log in logs)
 
 
 @pytest.mark.asyncio

@@ -174,12 +174,15 @@ async def ingest_gdelt_stability(
     )
 
     if instability_vol is not None and total_vol is not None and total_vol > 0:
-        # Ratio: what fraction of this country's coverage is instability-themed
+        # Ratio: what fraction of this country's coverage is instability-themed.
+        # For developed nations this typically ranges from 0.08 (NL) to 0.29 (US).
+        # Use absolute_score with floor=0.05, ceiling=0.40 (lower ratio = more stable).
+        from app.score.absolute import absolute_score
+
         instability_ratio = instability_vol / total_vol
-        # Typical range is 0.01 - 0.15.  Cap at 0.20 and map to 0-1.
-        cap = 0.20
-        normalized = min(instability_ratio / cap, 1.0)
-        stability_value = max(1.0 - normalized, 0.0)
+        stability_value = absolute_score(
+            instability_ratio, floor=0.05, ceiling=0.40, higher_is_better=False,
+        ) / 100.0  # Store as 0-1, converted to 0-100 in scoring
         log_fn(
             f"  GDELT stability: {country.iso2} = {stability_value:.3f}"
             f" (instability_vol={instability_vol:.3f},"
