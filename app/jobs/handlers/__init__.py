@@ -5,6 +5,7 @@ from app.jobs.handlers.company import company_refresh_handler
 from app.jobs.handlers.data_sync import data_sync_handler
 from app.jobs.handlers.add_companies import add_companies_by_market_cap_handler
 from app.jobs.handlers.recommendation import recommendation_analysis_handler
+from app.jobs.handlers.stock_screen import stock_screen_handler
 
 HANDLERS = {
     "echo": echo_handler,
@@ -14,4 +15,5 @@ HANDLERS = {
     "data_sync": data_sync_handler,
     "add_companies_by_market_cap": add_companies_by_market_cap_handler,
     "recommendation_analysis": recommendation_analysis_handler,
+    "stock_screen": stock_screen_handler,
 }

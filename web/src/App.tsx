@@ -17,6 +17,8 @@ const RecommendationDetail = lazy(() => import("@/pages/RecommendationDetail"));
 const Jobs = lazy(() => import("@/pages/Jobs"));
 const JobDetail = lazy(() => import("@/pages/JobDetail"));
 const Admin = lazy(() => import("@/pages/Admin"));
+const Screener = lazy(() => import("@/pages/Screener"));
+const ScreenerResult = lazy(() => import("@/pages/ScreenerResult"));
 
 export default function App() {
   return (
@@ -43,6 +45,8 @@ export default function App() {
                   <Route path="/industries/:gics_code" element={<IndustryDetail />} />
                   <Route path="/jobs" element={<Jobs />} />
                   <Route path="/jobs/:id" element={<JobDetail />} />
+                  <Route path="/screener" element={<Screener />} />
+                  <Route path="/screener/:id" element={<ScreenerResult />} />
                   <Route path="/admin" element={<Admin />} />
                 </Routes>
               </main>

@@ -7,6 +7,7 @@ const NAV_LINKS = [
   { to: "/industries", label: "Industries" },
   { to: "/companies", label: "Companies" },
   { to: "/recommendations", label: "Recommendations" },
+  { to: "/screener", label: "Screener" },
   { to: "/jobs", label: "Jobs" },
 ];
 
@@ -21,12 +22,17 @@ export default function NavBar() {
         <Link to="/dashboard" className="flex items-center gap-2 shrink-0 group">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
             <polyline
-              points="2,15 8,7 11,12 18,3"
+              points="2,15 8,7 11,12 15.5,6"
               stroke="#6b7280"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
               className="group-hover:stroke-gray-300 transition-colors"
+            />
+            <polygon
+              points="18,2 17,8.5 12.5,5"
+              fill="#6b7280"
+              className="group-hover:fill-gray-300 transition-colors"
             />
           </svg>
           <span className="text-lg font-bold text-gray-300 tracking-tight group-hover:text-white transition-colors">

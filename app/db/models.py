@@ -400,3 +400,24 @@ class DecisionPacket(Base):
     content: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     score_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+
+class ScreenResult(Base):
+    __tablename__ = "screen_results"
+    __table_args__ = (
+        Index("ix_screen_results_user_id", "user_id"),
+        Index("ix_screen_results_created_at", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    job_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
+    screen_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    screen_version: Mapped[str] = mapped_column(String(50), nullable=False, default="screen_v1")
+    params: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    summary: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    matches: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    artefact_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    user: Mapped[User] = relationship()
