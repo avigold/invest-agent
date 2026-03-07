@@ -1,7 +1,10 @@
-"""Score current universe using a trained prediction model.
+"""DETERMINISTIC SCORING SYSTEM — score current universe.
 
-Loads companies from the database, computes current features, and
-produces calibrated probability scores with confidence tiers.
+Part of the deterministic scoring system. Do not confuse with the ML/Parquet
+system (parquet_scorer.py, parquet_dataset.py, model.py).
+
+Loads companies from the database, computes current features (22 features),
+and produces calibrated probability scores with confidence tiers.
 """
 from __future__ import annotations
 

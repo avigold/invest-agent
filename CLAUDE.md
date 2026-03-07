@@ -13,6 +13,28 @@ The interaction model mirrors the job-queue-per-user design used in the user’s
 - Failures are visible: job logs are first-class and streamable.
 - Minimal ambiguity: implement exactly what `SPEC.md` and `ACCEPTANCE.md` say.
 
+## Scoring Systems (two separate, independent systems — NEVER conflate)
+
+This codebase has TWO completely independent scoring systems. They serve different purposes, use different data, and must NEVER be confused with each other. Never import from one system into another. Never apply ML methodology to deterministic files or vice versa.
+
+### ML/Parquet System
+- **Purpose**: LightGBM model predictions trained on comprehensive Parquet data (186 features)
+- **Files**: `app/predict/parquet_scorer.py`, `app/predict/parquet_dataset.py`, `app/predict/model.py`, `app/predict/backtest.py`
+- **Data source**: `data/exports/training_features.parquet`
+- **Invoked via**: CLI commands (`train_model`, `score_universe`)
+- **Portfolio construction**: Top-50 equal weight (2% each), deduped by company name — matches validated backtest
+- **Validated result**: 84.5% average annual return across 2018–2024 (seed 32)
+
+### Deterministic System
+- **Purpose**: Fundamentals-based scoring from CompanyScore database data (22 features)
+- **Files**: `app/predict/scorer.py`, `app/predict/strategy.py`, `app/predict/features.py`
+- **Data source**: Database (`CompanyScore` table)
+- **Invoked via**: `prediction_score.py` job handler, `prediction_train.py` job handler
+- **Portfolio construction**: Kelly criterion with sector/position constraints (in strategy.py)
+
+### Preflight check
+Before modifying ANY file in `app/predict/`, read `app/predict/README.md` to confirm which system the file belongs to. Modifying the wrong system is a blocking error.
+
 ## ML Model Protection (CRITICAL — read every word)
 
 Trained ML models are the most valuable asset in this project. Violating any rule below is a **blocking failure**. No exceptions. No shortcuts.
@@ -26,6 +48,11 @@ Trained ML models are the most valuable asset in this project. Violating any rul
 5. **Every trained model** must be saved to BOTH the database AND a file in `data/models/` with a descriptive name. The DB can be wiped; the file cannot be easily recovered.
 6. **Every training run** must log the full config (seed, countries, thresholds, all hyperparameters) to both the model's `config` JSONB field and the console output.
 7. **Before scoring**, always confirm which model ID to use. Never assume "latest."
+8. **NEVER delete, overwrite, or modify** `data/models/seed32_v1.pkl` or `data/models/seed32_v1_backup.pkl`.
+9. **NEVER run SQL** that deletes from `prediction_models` table.
+10. **NEVER modify** `app/predict/model.py` serialise/deserialise methods without explicit user approval.
+11. **NEVER modify** `scripts/gen_excel_deduped.py` — it is the ground truth reference.
+12. **Before any predict/ change**, verify model integrity (DB blob matches disk backup).
 
 ### Golden Model Config (Seed 32)
 

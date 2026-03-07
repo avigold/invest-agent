@@ -1,4 +1,10 @@
-"""Generate backtest Excel with seed 32, no India, deduped by company name."""
+"""GROUND TRUTH — DO NOT MODIFY.
+
+This script produced the validated 84.5% avg annual return (2018-2024).
+All production ML scoring must replicate this methodology exactly.
+
+Generate backtest Excel with seed 32, no India, deduped by company name.
+"""
 import sys
 sys.path.insert(0, "/Users/avramscore/Projects/invest-agent")
 

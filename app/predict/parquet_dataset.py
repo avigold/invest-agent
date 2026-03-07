@@ -1,4 +1,7 @@
-"""Load training data from Parquet export for LightGBM model training.
+"""ML/PARQUET SCORING SYSTEM — training data loader.
+
+Part of the ML/Parquet scoring system. Do not confuse with the deterministic
+system (scorer.py, strategy.py, features.py).
 
 Reads the comprehensive training features Parquet file (PRD 7.4 output),
 classifies columns, encodes categoricals, computes recency weights,
@@ -45,6 +48,7 @@ class ParquetDataset(Dataset):
     fiscal_years: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.int64))
     categorical_features: list[str] = field(default_factory=list)
     tickers: list[str] = field(default_factory=list)
+    company_names: list[str] = field(default_factory=list)
     forward_returns: np.ndarray = field(default_factory=lambda: np.empty(0))
     half_life: float = 7.0
     return_threshold: float | None = None
@@ -183,6 +187,7 @@ def load_parquet_dataset(
 
     # Extract metadata before dropping columns
     tickers = df["ticker"].tolist()
+    company_names = df["company_name"].fillna("").tolist()
     fiscal_years = df["fiscal_year"].values.astype(np.int64)
     fwd_returns = df["fwd_return_12m"].values.astype(np.float64)
 
@@ -256,6 +261,7 @@ def load_parquet_dataset(
         fiscal_years=fiscal_years,
         categorical_features=cat_feature_names,
         tickers=tickers,
+        company_names=company_names,
         forward_returns=fwd_returns,
         half_life=half_life,
         return_threshold=return_threshold,

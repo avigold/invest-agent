@@ -1,9 +1,13 @@
-"""Score the universe from Parquet data using a trained ML model.
+"""ML/PARQUET SCORING SYSTEM — production scorer.
 
-Standalone scoring pipeline — does NOT import from scorer.py or strategy.py.
+Part of the ML/Parquet scoring system. Do not confuse with the deterministic
+system (scorer.py, strategy.py, features.py).
+
+Scores the universe from Parquet data using a trained ML model.
 Loads the same Parquet export used for training, takes each stock's most recent
-fiscal year, predicts calibrated outperformance probabilities, and builds a
-constrained portfolio with Kelly sizing.
+fiscal year, predicts calibrated outperformance probabilities, and selects a
+top-50 equal-weight portfolio — matching the validated backtest methodology
+(scripts/gen_excel_deduped.py) exactly.
 """
 from __future__ import annotations
 
@@ -20,14 +24,12 @@ from app.predict.parquet_dataset import (
     _CATEGORICAL_COLUMNS,
 )
 
-# ── ML portfolio constants (relative outperformance model) ──────────────
-ML_AVG_WIN = 0.42           # Average excess return for outperformers
-ML_AVG_LOSS = -0.15         # Average excess return for underperformers
-ML_KELLY_FRACTION = 0.25    # Quarter-Kelly
-ML_MAX_POSITION = 0.10      # 10% max in any single stock
-ML_MAX_COUNTRY = 0.30       # 30% max in any country
-ML_MAX_SECTOR = 0.30        # 30% max in any sector
-ML_MIN_PROBABILITY = 0.15   # 15% minimum to enter a position
+# ── ML portfolio constants ──────────────────────────────────────────────
+# Matches validated backtest: top 50 equal weight (scripts/gen_excel_deduped.py)
+ML_TOP_N = 50               # Number of stocks in portfolio
+ML_AVG_WIN = 0.42           # Average excess return for outperformers (display only)
+ML_AVG_LOSS = -0.15         # Average excess return for underperformers (display only)
+ML_KELLY_FRACTION = 0.25    # Quarter-Kelly (display only — not used for portfolio construction)
 
 # ── Confidence tiers ────────────────────────────────────────────────────
 _CONFIDENCE_TIERS = [
@@ -266,54 +268,33 @@ def _build_portfolio(
     scored: list[ScoredStock],
     log: Callable[[str], None],
 ) -> None:
-    """Apply Kelly sizing with position, country, and sector constraints.
+    """Top-50 equal-weight portfolio — matches validated backtest exactly.
+
+    This replicates the methodology from scripts/gen_excel_deduped.py:
+    sort by probability descending (already done), take top 50 (already
+    deduped by company name), assign equal weight 1/50 = 2%.
+
+    No minimum probability threshold. No Kelly sizing for weights.
+    No sector/country constraints. All top 50 get in.
 
     Modifies scored[].suggested_weight in place.
     """
-    # Filter eligible
-    eligible = [s for s in scored if s.probability >= ML_MIN_PROBABILITY and s.kelly > 0]
-
-    # Cap individual positions
-    for s in eligible:
-        s.suggested_weight = min(s.kelly, ML_MAX_POSITION)
-
-    # Apply country constraints
-    country_weights: dict[str, float] = {}
-    for s in eligible:
-        current = country_weights.get(s.country, 0.0)
-        remaining = ML_MAX_COUNTRY - current
-        if remaining <= 0:
+    weight = round(1.0 / ML_TOP_N, 4)  # 0.02
+    selected = 0
+    for s in scored:  # Already sorted by probability desc, already deduped
+        if selected < ML_TOP_N:
+            s.suggested_weight = weight
+            selected += 1
+        else:
             s.suggested_weight = 0.0
-        elif s.suggested_weight > remaining:
-            s.suggested_weight = remaining
-        country_weights[s.country] = country_weights.get(s.country, 0.0) + s.suggested_weight
 
-    # Apply sector constraints
-    sector_weights: dict[str, float] = {}
-    for s in eligible:
-        if s.suggested_weight <= 0:
-            continue
-        current = sector_weights.get(s.sector, 0.0)
-        remaining = ML_MAX_SECTOR - current
-        if remaining <= 0:
-            s.suggested_weight = 0.0
-        elif s.suggested_weight > remaining:
-            s.suggested_weight = remaining
-        sector_weights[s.sector] = sector_weights.get(s.sector, 0.0) + s.suggested_weight
-
-    # Remove zero-weight
-    with_weight = [s for s in eligible if s.suggested_weight > 0]
-
-    # Normalize if total > 1.0
-    total = sum(s.suggested_weight for s in with_weight)
-    if total > 1.0:
-        for s in with_weight:
-            s.suggested_weight = round(s.suggested_weight / total, 4)
+    log(f"Portfolio: top {selected} stocks, equal weight {weight:.1%} each")
 
     # Log country breakdown
     country_summary: dict[str, float] = {}
-    for s in with_weight:
-        country_summary[s.country] = country_summary.get(s.country, 0.0) + s.suggested_weight
+    for s in scored:
+        if s.suggested_weight > 0:
+            country_summary[s.country] = country_summary.get(s.country, 0.0) + s.suggested_weight
     if country_summary:
         parts = sorted(country_summary.items(), key=lambda x: -x[1])
         log("Country allocation: " + ", ".join(

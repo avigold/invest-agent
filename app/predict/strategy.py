@@ -1,7 +1,10 @@
-"""Portfolio construction strategy — Kelly sizing with constraints.
+"""DETERMINISTIC SCORING SYSTEM — portfolio construction strategy.
 
-Converts model predictions into portfolio weights, applying position limits,
-sector diversification caps, and minimum probability thresholds.
+Part of the deterministic scoring system. Do not confuse with the ML/Parquet
+system (parquet_scorer.py, parquet_dataset.py, model.py).
+
+Converts model predictions into portfolio weights using Kelly sizing with
+position limits, sector diversification caps, and minimum probability thresholds.
 """
 from __future__ import annotations
 

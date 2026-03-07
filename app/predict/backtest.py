@@ -1,18 +1,23 @@
-"""Backtesting framework — evaluate model predictions against historical outcomes.
+"""ML/PARQUET SCORING SYSTEM — backtesting framework.
 
-Uses walk-forward fold results to simulate portfolio construction and
-measure actual performance.
+Part of the ML/Parquet scoring system. Do not confuse with the deterministic
+system (scorer.py, strategy.py, features.py).
+
+Evaluates model predictions against historical outcomes using the validated
+methodology: top-50 equal-weight portfolio per fold, with company name
+deduplication (matching scripts/gen_excel_deduped.py exactly).
 """
 from __future__ import annotations
 
-import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
-from app.predict.model import FoldResult, TrainedModel, _apply_platt
+from app.predict.model import TrainedModel, _apply_platt
 from app.predict.dataset import Dataset
-from app.predict.strategy import Position, build_portfolio
+
+# Portfolio size — matches validated backtest (scripts/gen_excel_deduped.py)
+_BACKTEST_TOP_N = 50
 
 
 @dataclass
@@ -24,7 +29,7 @@ class FoldBacktest:
     positions: list[dict]          # [{ticker, weight, probability, actual_return, hit}]
     portfolio_return: float        # Weighted portfolio return
     hit_rate: float                # Fraction of positions that were winners
-    total_invested: float          # Sum of weights (may be < 1 if few positions)
+    total_invested: float          # Sum of weights (may be < 1 if fewer than TOP_N stocks)
 
 
 @dataclass
@@ -48,12 +53,20 @@ def run_backtest(
 ) -> BacktestResults:
     """Run backtest using walk-forward fold results.
 
-    For each fold, calibrates the raw predictions using Platt scaling,
-    builds a portfolio, and evaluates against actual forward returns.
+    Replicates the validated methodology (scripts/gen_excel_deduped.py):
+    1. Calibrate raw predictions via Platt scaling (ranking preserved)
+    2. Sort by probability descending
+    3. Deduplicate by company name when available (ParquetDataset)
+    4. Select top 50
+    5. Equal weight: 2% each (1/50)
+    6. No return cap, no minimum probability, no constraints
+
+    Hit = outperformer (label == 1), NOT a return threshold.
 
     Args:
         model: Trained model with fold results.
-        dataset: Dataset with metadata (forward returns).
+        dataset: Dataset with metadata. If a ParquetDataset, company name
+            deduplication is applied per fold.
 
     Returns:
         BacktestResults with per-fold and aggregate metrics.
@@ -62,64 +75,101 @@ def run_backtest(
     all_predicted: list[float] = []
     all_actual: list[int] = []
 
+    # Check if dataset has company_names (ParquetDataset)
+    has_company_names = (
+        hasattr(dataset, "company_names")
+        and len(getattr(dataset, "company_names", [])) > 0
+    )
+    # Check if dataset has forward_returns array (ParquetDataset)
+    has_forward_returns = (
+        hasattr(dataset, "forward_returns")
+        and getattr(dataset, "forward_returns", None) is not None
+        and len(getattr(dataset, "forward_returns", [])) > 0
+    )
+
     for fold in model.fold_results:
-        # Calibrate predictions
+        # Calibrate predictions (Platt scaling is monotonic — ranking preserved)
         probs = _apply_platt(fold.predictions, model.platt_a, model.platt_b)
 
-        # Build prediction dicts for portfolio construction
-        pred_dicts = []
+        # Build per-stock data for this fold
+        stocks: list[dict] = []
         for idx_in_fold, global_idx in enumerate(fold.test_indices):
-            if global_idx >= len(dataset.meta):
-                continue
-            meta = dataset.meta[global_idx]
-            pred_dicts.append({
-                "ticker": meta.ticker,
+            if has_forward_returns:
+                # ParquetDataset path
+                if global_idx >= len(dataset.tickers):
+                    continue
+                ticker = dataset.tickers[global_idx]
+                company_name = dataset.company_names[global_idx] if has_company_names else ""
+                forward_return = float(dataset.forward_returns[global_idx])
+                label = int(dataset.y[global_idx])
+            else:
+                # Dataset path (deterministic system)
+                if global_idx >= len(dataset.meta):
+                    continue
+                meta = dataset.meta[global_idx]
+                ticker = meta.ticker
+                company_name = ""
+                forward_return = meta.forward_return
+                label = 1 if meta.label == "winner" else 0
+
+            stocks.append({
+                "ticker": ticker,
+                "company_name": company_name,
                 "probability": float(probs[idx_in_fold]),
-                "sector": "Unknown",  # Sector not stored in meta
-                "forward_return": meta.forward_return,
-                "label": meta.label,
+                "forward_return": forward_return,
+                "label": label,
             })
 
-        # Collect for calibration
-        for pd_item in pred_dicts:
-            all_predicted.append(pd_item["probability"])
-            all_actual.append(1 if pd_item["label"] == "winner" else 0)
+        # Collect for calibration (before dedup/selection)
+        for s in stocks:
+            all_predicted.append(s["probability"])
+            all_actual.append(s["label"])
 
-        # Build portfolio
-        portfolio = build_portfolio(pred_dicts)
+        # Sort by probability descending
+        stocks.sort(key=lambda s: -s["probability"])
+
+        # Deduplicate by company name (matches gen_excel_deduped.py)
+        if has_company_names:
+            seen: set[str] = set()
+            deduped: list[dict] = []
+            for s in stocks:
+                key = s["company_name"].strip().lower()
+                if key and key in seen:
+                    continue
+                if key:
+                    seen.add(key)
+                deduped.append(s)
+            stocks = deduped
+
+        # Select top N — no minimum probability, no constraints
+        top_n = stocks[:_BACKTEST_TOP_N]
+        weight = round(1.0 / _BACKTEST_TOP_N, 4) if _BACKTEST_TOP_N > 0 else 0.0
 
         # Evaluate
-        positions_data = []
+        positions_data: list[dict] = []
         total_hits = 0
         portfolio_return = 0.0
-        total_invested = sum(p.weight for p in portfolio)
 
-        for pos in portfolio:
-            # Find the actual forward return for this position
-            actual = next(
-                (d["forward_return"] for d in pred_dicts if d["ticker"] == pos.ticker),
-                0.0,
-            )
-            is_hit = actual >= 3.0  # 4x = 300% return threshold
+        for s in top_n:
+            actual = s["forward_return"]
+            is_hit = s["label"] == 1  # Hit = outperformer (label == winner)
             if is_hit:
                 total_hits += 1
 
-            # Cap individual position return (can't lose more than position)
-            pos_return = max(actual, -1.0)
-            portfolio_return += pos.weight * pos_return
+            # No return cap — matches validated methodology
+            portfolio_return += weight * actual
 
             positions_data.append({
-                "ticker": pos.ticker,
-                "weight": round(pos.weight, 4),
-                "probability": round(pos.probability, 4),
+                "ticker": s["ticker"],
+                "weight": weight,
+                "probability": round(s["probability"], 4),
                 "actual_return": round(actual, 4),
                 "hit": is_hit,
             })
 
-        # Cash portion earns 0
-        # portfolio_return already accounts for invested portion
+        n_pos = len(top_n)
+        total_invested = round(weight * n_pos, 4)
 
-        n_pos = len(portfolio)
         fold_backtests.append(FoldBacktest(
             year=fold.year,
             n_positions=n_pos,
@@ -149,7 +199,7 @@ def run_backtest(
     else:
         cagr = -1.0
 
-    # Sharpe (annualized, assuming annual returns)
+    # Sharpe (annualised, assuming annual returns)
     if len(returns) >= 2:
         mean_r = np.mean(returns)
         std_r = np.std(returns, ddof=1)

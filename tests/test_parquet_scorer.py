@@ -11,9 +11,7 @@ import pytest
 from app.predict.parquet_scorer import (
     ML_AVG_LOSS,
     ML_AVG_WIN,
-    ML_MAX_COUNTRY,
-    ML_MAX_POSITION,
-    ML_MIN_PROBABILITY,
+    ML_TOP_N,
     ScoredStock,
     _build_portfolio,
     _confidence_tier,
@@ -274,6 +272,8 @@ class TestScoreFromParquet:
 
 
 class TestBuildPortfolio:
+    """Tests for top-50 equal-weight portfolio (validated methodology)."""
+
     def _make_scored(self, n: int, probability: float = 0.35,
                      country: str = "US", sector: str = "Tech") -> list[ScoredStock]:
         return [
@@ -293,57 +293,58 @@ class TestBuildPortfolio:
             for i in range(n)
         ]
 
-    def test_position_cap(self):
-        scored = self._make_scored(3, probability=0.45)
+    def test_top_50_equal_weight(self):
+        """Exactly 50 stocks get 2% weight each."""
+        scored = self._make_scored(80, probability=0.35)
+        _build_portfolio(scored, lambda _: None)
+
+        in_portfolio = [s for s in scored if s.suggested_weight > 0]
+        assert len(in_portfolio) == ML_TOP_N
+        expected_weight = round(1.0 / ML_TOP_N, 4)
+        for s in in_portfolio:
+            assert s.suggested_weight == expected_weight
+
+    def test_fewer_than_50_all_included(self):
+        """When fewer than 50 stocks, all get the equal weight."""
+        scored = self._make_scored(10, probability=0.35)
+        _build_portfolio(scored, lambda _: None)
+
+        in_portfolio = [s for s in scored if s.suggested_weight > 0]
+        assert len(in_portfolio) == 10
+        expected_weight = round(1.0 / ML_TOP_N, 4)
+        for s in in_portfolio:
+            assert s.suggested_weight == expected_weight
+
+    def test_no_minimum_probability(self):
+        """Even very low probability stocks are included if in top 50."""
+        scored = self._make_scored(5, probability=0.01)
         _build_portfolio(scored, lambda _: None)
 
         for s in scored:
-            assert s.suggested_weight <= ML_MAX_POSITION + 0.001
+            assert s.suggested_weight > 0  # All get weight, no minimum probability
 
-    def test_country_cap(self):
-        # 10 stocks all from same country
-        scored = self._make_scored(10, probability=0.35, country="IN")
-        _build_portfolio(scored, lambda _: None)
-
-        total_country = sum(s.suggested_weight for s in scored)
-        assert total_country <= ML_MAX_COUNTRY + 0.001
-
-    def test_low_probability_excluded(self):
-        scored = self._make_scored(5, probability=0.10)  # Below ML_MIN_PROBABILITY
-        _build_portfolio(scored, lambda _: None)
-
-        for s in scored:
-            assert s.suggested_weight == 0.0
-
-    def test_weights_sum_to_at_most_one(self):
-        # Many high-probability stocks
-        scored = self._make_scored(50, probability=0.40)
-        # Assign different countries/sectors so caps don't bind
-        for i, s in enumerate(scored):
-            s.country = f"C{i}"
-            s.sector = f"S{i}"
-            s.kelly = _kelly_fraction(s.probability)
-
+    def test_weights_sum_to_one(self):
+        """With 50+ stocks, portfolio utilisation is exactly 100%."""
+        scored = self._make_scored(60, probability=0.40)
         _build_portfolio(scored, lambda _: None)
 
         total = sum(s.suggested_weight for s in scored)
-        assert total <= 1.001
+        assert abs(total - 1.0) < 0.001
 
-    def test_diversified_countries(self):
-        # 5 stocks per country, 4 countries
-        scored = []
-        for country in ["US", "GB", "IN", "DE"]:
-            scored.extend(self._make_scored(5, probability=0.35, country=country))
-        # Different sectors to avoid sector cap binding
-        for i, s in enumerate(scored):
-            s.sector = f"S{i}"
-            s.kelly = _kelly_fraction(s.probability)
-
+    def test_no_country_cap(self):
+        """All stocks from same country are included — no country constraints."""
+        scored = self._make_scored(30, probability=0.35, country="US")
         _build_portfolio(scored, lambda _: None)
 
-        country_weights: dict[str, float] = {}
-        for s in scored:
-            country_weights[s.country] = country_weights.get(s.country, 0.0) + s.suggested_weight
+        # All 30 should be in portfolio (< 50)
+        in_portfolio = [s for s in scored if s.suggested_weight > 0]
+        assert len(in_portfolio) == 30
 
-        for cw in country_weights.values():
-            assert cw <= ML_MAX_COUNTRY + 0.001
+    def test_no_sector_cap(self):
+        """All stocks from same sector are included — no sector constraints."""
+        scored = self._make_scored(40, probability=0.35, sector="Tech")
+        _build_portfolio(scored, lambda _: None)
+
+        # All 40 should be in portfolio (< 50)
+        in_portfolio = [s for s in scored if s.suggested_weight > 0]
+        assert len(in_portfolio) == 40

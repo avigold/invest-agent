@@ -1,7 +1,11 @@
-"""Point-in-time feature computation for prediction model.
+"""DETERMINISTIC SCORING SYSTEM — feature computation.
 
-All features are computed using only data available at the observation date.
-Monthly price series is the primary input — fundamentals are sparse and optional.
+Part of the deterministic scoring system. Do not confuse with the ML/Parquet
+system (parquet_scorer.py, parquet_dataset.py, model.py).
+
+Point-in-time feature computation (22 features). All features are computed
+using only data available at the observation date. Monthly price series is
+the primary input — fundamentals are sparse and optional.
 """
 from __future__ import annotations
 
