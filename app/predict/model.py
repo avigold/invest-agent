@@ -17,6 +17,7 @@ import numpy as np
 from app.predict.dataset import Dataset
 
 MODEL_VERSION = "predictor_v1"
+PARQUET_MODEL_VERSION = "predictor_v2_parquet"
 
 # Conservative hyperparameters for small datasets (~2000 obs)
 DEFAULT_PARAMS: dict = {
@@ -36,6 +37,25 @@ DEFAULT_EARLY_STOPPING_ROUNDS = 30
 
 # Walk-forward fold years (train on < year, test on == year)
 DEFAULT_FOLD_YEARS = list(range(2015, 2021))  # 2015..2020
+
+# Hyperparameters for large Parquet datasets (~40k rows/year)
+PARQUET_PARAMS: dict = {
+    "objective": "binary",
+    "metric": "auc",
+    "num_leaves": 63,
+    "min_data_in_leaf": 50,
+    "learning_rate": 0.05,
+    "feature_fraction": 0.6,
+    "bagging_fraction": 0.7,
+    "bagging_freq": 5,
+    "max_depth": -1,
+    "verbose": -1,
+}
+
+PARQUET_NUM_BOOST_ROUND = 1000
+PARQUET_EARLY_STOPPING_ROUNDS = 50
+PARQUET_FOLD_YEARS = list(range(2018, 2024))  # 2018..2023
+PARQUET_HOLDOUT_YEAR = 2024
 
 
 @dataclass
@@ -410,3 +430,326 @@ def train_walk_forward(
             "model_version": MODEL_VERSION,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Precision@K
+# ---------------------------------------------------------------------------
+
+
+def _compute_precision_at_k(
+    labels: np.ndarray,
+    scores: np.ndarray,
+    k_values: list[int] | None = None,
+) -> dict[str, float]:
+    """Compute precision at top-K predictions.
+
+    Args:
+        labels: Binary labels (0 or 1).
+        scores: Predicted scores (higher = more likely positive).
+        k_values: List of K values to evaluate.
+
+    Returns:
+        Dict mapping "precision@K" to precision value.
+    """
+    if k_values is None:
+        k_values = [100, 500, 1000]
+
+    order = np.argsort(-scores)  # descending
+    result = {}
+    for k in k_values:
+        if k > len(labels):
+            continue
+        top_k_labels = labels[order[:k]]
+        result[f"precision@{k}"] = float(top_k_labels.mean())
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Walk-Forward Training (Parquet dataset)
+# ---------------------------------------------------------------------------
+
+
+def train_walk_forward_parquet(
+    dataset: "ParquetDataset",  # noqa: F821 — avoid circular import
+    fold_years: list[int] | None = None,
+    holdout_year: int | None = PARQUET_HOLDOUT_YEAR,
+    params: dict | None = None,
+    num_boost_round: int = PARQUET_NUM_BOOST_ROUND,
+    early_stopping_rounds: int = PARQUET_EARLY_STOPPING_ROUNDS,
+    log_fn: Callable[[str], None] | None = None,
+) -> TrainedModel:
+    """Train LightGBM with walk-forward CV on Parquet dataset.
+
+    Like train_walk_forward() but supports:
+    - Recency-weighted sample weights (recomputed per fold)
+    - Categorical features (gics_code, country_iso2)
+    - Holdout year evaluation
+    - Precision@K metrics per fold
+
+    Args:
+        dataset: ParquetDataset with features, labels, fiscal years, weights.
+        fold_years: Years to use as test folds (default: 2018-2023).
+        holdout_year: Year reserved for final evaluation (excluded from folds).
+        params: LightGBM parameters (default: PARQUET_PARAMS).
+        num_boost_round: Max boosting rounds.
+        early_stopping_rounds: Early stopping patience.
+        log_fn: Optional logging callback.
+
+    Returns:
+        TrainedModel with fold results, holdout metrics, and feature importance.
+    """
+    from app.predict.parquet_dataset import compute_recency_weights
+
+    log = log_fn or (lambda _: None)
+    fold_years = fold_years or PARQUET_FOLD_YEARS
+    params = {**PARQUET_PARAMS, **(params or {})}
+
+    fiscal_years = dataset.fiscal_years
+    cat_features = dataset.categorical_features
+    half_life = dataset.half_life
+
+    # Determine categorical feature indices for LightGBM
+    cat_indices = [
+        dataset.feature_names.index(c)
+        for c in cat_features
+        if c in dataset.feature_names
+    ]
+
+    fold_results: list[FoldResult] = []
+    all_oof_scores: list[np.ndarray] = []
+    all_oof_labels: list[np.ndarray] = []
+
+    log(f"Walk-forward CV: folds={fold_years}, holdout={holdout_year}, "
+        f"half_life={half_life}y")
+
+    for year in fold_years:
+        train_mask = fiscal_years < year
+        test_mask = fiscal_years == year
+
+        # Exclude holdout year from training
+        if holdout_year is not None:
+            train_mask = train_mask & (fiscal_years != holdout_year)
+
+        n_train = int(train_mask.sum())
+        n_test = int(test_mask.sum())
+
+        if n_train < 100 or n_test < 50:
+            log(f"  Fold {year}: skipped (train={n_train}, test={n_test})")
+            continue
+
+        X_train = dataset.X[train_mask]
+        y_train = dataset.y[train_mask]
+        X_test = dataset.X[test_mask]
+        y_test = dataset.y[test_mask]
+
+        # Recompute recency weights for this fold's training data
+        max_train_year = year - 1
+        train_fiscal_years = fiscal_years[train_mask]
+        fold_weights = compute_recency_weights(
+            train_fiscal_years, max_train_year, half_life
+        )
+
+        # Compute scale_pos_weight
+        n_pos_train = int(y_train.sum())
+        n_neg_train = n_train - n_pos_train
+        fold_params = {**params}
+        if n_pos_train > 0:
+            fold_params["scale_pos_weight"] = n_neg_train / n_pos_train
+
+        train_ds = lgb.Dataset(
+            X_train, label=y_train, weight=fold_weights,
+            feature_name=dataset.feature_names,
+            categorical_feature=cat_indices if cat_indices else "auto",
+            free_raw_data=False,
+        )
+        valid_ds = lgb.Dataset(
+            X_test, label=y_test,
+            feature_name=dataset.feature_names,
+            categorical_feature=cat_indices if cat_indices else "auto",
+            free_raw_data=False,
+        )
+
+        callbacks = [lgb.early_stopping(early_stopping_rounds, verbose=False)]
+        booster = lgb.train(
+            fold_params,
+            train_ds,
+            num_boost_round=num_boost_round,
+            valid_sets=[valid_ds],
+            callbacks=callbacks,
+        )
+
+        preds = booster.predict(X_test)
+        auc = _compute_auc(y_test, preds)
+        prec_at_k = _compute_precision_at_k(y_test, preds)
+
+        test_indices = np.where(test_mask)[0]
+        fr = FoldResult(
+            year=year,
+            n_train=n_train,
+            n_test=n_test,
+            n_train_pos=n_pos_train,
+            n_test_pos=int(y_test.sum()),
+            auc=auc,
+            predictions=preds,
+            labels=y_test,
+            test_indices=test_indices,
+        )
+        fold_results.append(fr)
+        all_oof_scores.append(preds)
+        all_oof_labels.append(y_test)
+
+        prec_str = ", ".join(f"{k}={v:.1%}" for k, v in prec_at_k.items())
+        log(f"  Fold {year}: AUC={auc:.4f} | {prec_str} | "
+            f"train={n_train} test={n_test} pos={n_pos_train}/{int(y_test.sum())}")
+
+    # Build training set for final model (exclude holdout)
+    final_train_mask = np.ones(len(fiscal_years), dtype=bool)
+    if holdout_year is not None:
+        final_train_mask = fiscal_years != holdout_year
+    # Also exclude years beyond the last fold year for the final model
+    max_fold_year = max(fold_years)
+    final_train_mask = final_train_mask & (fiscal_years <= max_fold_year)
+
+    X_final = dataset.X[final_train_mask]
+    y_final = dataset.y[final_train_mask]
+
+    log(f"Training final model on {int(final_train_mask.sum())} rows "
+        f"(years <= {max_fold_year})...")
+
+    # Recency weights for final model
+    final_fiscal_years = fiscal_years[final_train_mask]
+    final_weights = compute_recency_weights(
+        final_fiscal_years, max_fold_year, half_life
+    )
+
+    n_pos_final = int(y_final.sum())
+    n_neg_final = len(y_final) - n_pos_final
+    final_params = {**params}
+    if n_pos_final > 0:
+        final_params["scale_pos_weight"] = n_neg_final / n_pos_final
+
+    final_train_ds = lgb.Dataset(
+        X_final, label=y_final, weight=final_weights,
+        feature_name=dataset.feature_names,
+        categorical_feature=cat_indices if cat_indices else "auto",
+        free_raw_data=False,
+    )
+    final_booster = lgb.train(
+        final_params,
+        final_train_ds,
+        num_boost_round=num_boost_round,
+    )
+
+    # Platt scaling on pooled out-of-fold predictions
+    if all_oof_scores:
+        oof_scores = np.concatenate(all_oof_scores)
+        oof_labels = np.concatenate(all_oof_labels)
+        platt_a, platt_b = platt_scale(oof_scores, oof_labels)
+        log(f"Platt calibration: A={platt_a:.4f}, B={platt_b:.4f}")
+    else:
+        platt_a, platt_b = -1.0, 0.0
+        log("WARNING: No fold results — using default Platt params")
+
+    # Feature importance (gain-based)
+    importance = final_booster.feature_importance(importance_type="gain")
+    total = importance.sum()
+    feat_imp = {}
+    if total > 0:
+        for name, imp in zip(dataset.feature_names, importance):
+            feat_imp[name] = float(imp / total)
+    feat_imp = dict(sorted(feat_imp.items(), key=lambda x: -x[1]))
+
+    log(f"\nTop 20 features:")
+    for i, (k, v) in enumerate(feat_imp.items()):
+        if i >= 20:
+            break
+        log(f"  {i + 1:2d}. {k:45s} {v:.4f}")
+
+    # Holdout evaluation
+    holdout_metrics = {}
+    if holdout_year is not None:
+        holdout_mask = fiscal_years == holdout_year
+        n_holdout = int(holdout_mask.sum())
+        if n_holdout > 0:
+            X_holdout = dataset.X[holdout_mask]
+            y_holdout = dataset.y[holdout_mask]
+            holdout_preds = final_booster.predict(X_holdout)
+            holdout_auc = _compute_auc(y_holdout, holdout_preds)
+            holdout_prec = _compute_precision_at_k(y_holdout, holdout_preds)
+
+            # Calibration analysis
+            calibrated = _apply_platt(holdout_preds, platt_a, platt_b)
+            calibration = _compute_calibration_buckets(y_holdout, calibrated)
+
+            holdout_metrics = {
+                "year": holdout_year,
+                "n": n_holdout,
+                "n_pos": int(y_holdout.sum()),
+                "auc": holdout_auc,
+                **holdout_prec,
+                "calibration": calibration,
+            }
+
+            prec_str = ", ".join(f"{k}={v:.1%}" for k, v in holdout_prec.items())
+            log(f"\nHoldout {holdout_year}: AUC={holdout_auc:.4f} | {prec_str} | "
+                f"n={n_holdout} pos={int(y_holdout.sum())}")
+
+            log("Calibration (predicted vs actual winner rate):")
+            for bucket in calibration:
+                log(f"  {bucket['bucket']:15s}: "
+                    f"predicted={bucket['mean_predicted']:.1%} "
+                    f"actual={bucket['actual_rate']:.1%} "
+                    f"n={bucket['count']}")
+
+    # Build train config
+    train_config = {
+        "params": final_params,
+        "num_boost_round": num_boost_round,
+        "early_stopping_rounds": early_stopping_rounds,
+        "fold_years": fold_years,
+        "holdout_year": holdout_year,
+        "half_life": half_life,
+        "n_observations": dataset.n_observations,
+        "n_winners": dataset.n_winners,
+        "base_rate": dataset.base_rate,
+        "model_version": PARQUET_MODEL_VERSION,
+        "holdout_metrics": holdout_metrics,
+    }
+
+    return TrainedModel(
+        booster=final_booster,
+        platt_a=platt_a,
+        platt_b=platt_b,
+        feature_names=dataset.feature_names,
+        fold_results=fold_results,
+        feature_importance=feat_imp,
+        train_config=train_config,
+    )
+
+
+def _compute_calibration_buckets(
+    labels: np.ndarray,
+    probabilities: np.ndarray,
+    n_buckets: int = 10,
+) -> list[dict]:
+    """Compute calibration analysis in decile buckets."""
+    order = np.argsort(probabilities)
+    bucket_size = len(labels) // n_buckets
+    buckets = []
+
+    for i in range(n_buckets):
+        start = i * bucket_size
+        end = (i + 1) * bucket_size if i < n_buckets - 1 else len(labels)
+        idx = order[start:end]
+        bucket_labels = labels[idx]
+        bucket_probs = probabilities[idx]
+
+        buckets.append({
+            "bucket": f"decile_{i + 1}",
+            "mean_predicted": float(bucket_probs.mean()),
+            "actual_rate": float(bucket_labels.mean()),
+            "count": len(idx),
+        })
+
+    return buckets

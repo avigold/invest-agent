@@ -306,6 +306,235 @@ async def _export_training_async(
     await dispose_engine()
 
 
+@app_cli.command()
+def train_model(
+    parquet_path: str = typer.Option(
+        "data/exports/training_features.parquet",
+        help="Path to training features Parquet file",
+    ),
+    half_life: float = typer.Option(7.0, help="Recency half-life in years"),
+    fold_years: Optional[str] = typer.Option(
+        None, help="Comma-separated test fold years (default: 2018-2023)",
+    ),
+    holdout_year: Optional[int] = typer.Option(2024, help="Holdout evaluation year"),
+    min_fiscal_year: int = typer.Option(2000, help="Earliest fiscal year to include"),
+    num_leaves: int = typer.Option(63, help="LightGBM num_leaves"),
+    skip_db_store: bool = typer.Option(False, help="Skip storing model in database"),
+):
+    """Train ML model from Parquet training data.
+
+    Trains a LightGBM binary classifier with walk-forward cross-validation,
+    recency weighting, and Platt calibration. Evaluates on holdout year.
+
+    Usage:
+        python -m app.cli train-model
+        python -m app.cli train-model --half-life 5.0 --holdout-year 2023
+    """
+    import asyncio
+    import time
+
+    from app.predict.parquet_dataset import load_parquet_dataset
+    from app.predict.model import (
+        PARQUET_PARAMS,
+        PARQUET_NUM_BOOST_ROUND,
+        PARQUET_EARLY_STOPPING_ROUNDS,
+        PARQUET_FOLD_YEARS,
+        train_walk_forward_parquet,
+    )
+
+    t0 = time.monotonic()
+
+    # Parse fold years
+    folds = None
+    if fold_years:
+        folds = [int(y.strip()) for y in fold_years.split(",")]
+
+    # Load dataset
+    typer.echo("Loading Parquet dataset...")
+    dataset = load_parquet_dataset(
+        parquet_path=parquet_path,
+        min_fiscal_year=min_fiscal_year,
+        half_life=half_life,
+        log_fn=typer.echo,
+    )
+
+    # Override params if custom num_leaves
+    params = {**PARQUET_PARAMS, "num_leaves": num_leaves}
+
+    # Train
+    typer.echo("\nStarting walk-forward training...")
+    trained = train_walk_forward_parquet(
+        dataset=dataset,
+        fold_years=folds,
+        holdout_year=holdout_year,
+        params=params,
+        num_boost_round=PARQUET_NUM_BOOST_ROUND,
+        early_stopping_rounds=PARQUET_EARLY_STOPPING_ROUNDS,
+        log_fn=typer.echo,
+    )
+
+    # Print summary
+    metrics = trained.aggregate_metrics
+    elapsed = time.monotonic() - t0
+    typer.echo(f"\n{'=' * 60}")
+    typer.echo(f"Training complete in {elapsed:.0f}s")
+    typer.echo(f"Mean AUC: {metrics.get('mean_auc', 0):.4f} "
+               f"(±{metrics.get('std_auc', 0):.4f})")
+    typer.echo(f"Folds: {metrics.get('n_folds', 0)}, "
+               f"Total test obs: {metrics.get('total_test_obs', 0)}, "
+               f"Total test pos: {metrics.get('total_test_pos', 0)}")
+
+    # Store in database
+    if not skip_db_store:
+        asyncio.run(_store_trained_model(trained))
+    else:
+        typer.echo("Skipping database storage (--skip-db-store)")
+
+
+async def _store_trained_model(trained) -> None:
+    """Store trained model in PredictionModel table."""
+    import uuid
+
+    from sqlalchemy import select
+
+    from app.db.models import PredictionModel
+    from app.db.session import _get_session_factory, dispose_engine
+
+    sf = _get_session_factory()
+    async with sf() as db:
+        model_row = PredictionModel(
+            id=uuid.uuid4(),
+            model_version=trained.train_config.get("model_version", "unknown"),
+            config=trained.train_config,
+            fold_metrics=[{
+                "year": fr.year,
+                "auc": fr.auc,
+                "n_train": fr.n_train,
+                "n_test": fr.n_test,
+                "n_train_pos": fr.n_train_pos,
+                "n_test_pos": fr.n_test_pos,
+            } for fr in trained.fold_results],
+            aggregate_metrics=trained.aggregate_metrics,
+            feature_importance=trained.feature_importance,
+            model_blob=trained.serialize(),
+            platt_a=trained.platt_a,
+            platt_b=trained.platt_b,
+        )
+        db.add(model_row)
+        await db.commit()
+        typer.echo(f"Model stored in database: {model_row.id}")
+
+    await dispose_engine()
+
+
+@app_cli.command()
+def evaluate_model(
+    parquet_path: str = typer.Option(
+        "data/exports/training_features.parquet",
+        help="Path to training features Parquet file",
+    ),
+    year: int = typer.Option(2024, help="Year to evaluate on"),
+    model_id: Optional[str] = typer.Option(None, help="Model UUID (default: latest)"),
+):
+    """Evaluate a trained model on a specific year of holdout data.
+
+    Usage:
+        python -m app.cli evaluate-model
+        python -m app.cli evaluate-model --year 2023 --model-id UUID
+    """
+    import asyncio
+
+    asyncio.run(_evaluate_model_async(parquet_path, year, model_id))
+
+
+async def _evaluate_model_async(
+    parquet_path: str, year: int, model_id: str | None,
+) -> None:
+    """Load model from DB, evaluate on target year."""
+    import numpy as np
+    from sqlalchemy import select
+
+    from app.db.models import PredictionModel
+    from app.db.session import _get_session_factory, dispose_engine
+    from app.predict.model import (
+        TrainedModel, _compute_auc, _compute_precision_at_k,
+        _apply_platt, _compute_calibration_buckets,
+    )
+    from app.predict.parquet_dataset import load_parquet_dataset
+
+    sf = _get_session_factory()
+
+    # Load model
+    async with sf() as db:
+        if model_id:
+            import uuid as uuid_mod
+            query = select(PredictionModel).where(
+                PredictionModel.id == uuid_mod.UUID(model_id)
+            )
+        else:
+            query = (
+                select(PredictionModel)
+                .order_by(PredictionModel.created_at.desc())
+                .limit(1)
+            )
+        result = await db.execute(query)
+        model_row = result.scalars().first()
+
+    if not model_row:
+        typer.echo("No model found in database.")
+        await dispose_engine()
+        return
+
+    typer.echo(f"Model: {model_row.id} ({model_row.model_version}, "
+               f"created {model_row.created_at})")
+
+    trained = TrainedModel.deserialize(
+        model_row.model_blob,
+        feature_importance=model_row.feature_importance,
+        train_config=model_row.config,
+    )
+
+    # Load dataset and filter to evaluation year
+    dataset = load_parquet_dataset(
+        parquet_path=parquet_path,
+        min_fiscal_year=year,
+        log_fn=lambda _: None,
+    )
+
+    # Filter to target year
+    mask = dataset.fiscal_years == year
+    n = int(mask.sum())
+    if n == 0:
+        typer.echo(f"No data for year {year}.")
+        await dispose_engine()
+        return
+
+    X_eval = dataset.X[mask]
+    y_eval = dataset.y[mask]
+
+    # Predict
+    raw_preds = trained.booster.predict(X_eval)
+    calibrated = _apply_platt(raw_preds, trained.platt_a, trained.platt_b)
+
+    auc = _compute_auc(y_eval, raw_preds)
+    prec_at_k = _compute_precision_at_k(y_eval, raw_preds)
+    calibration = _compute_calibration_buckets(y_eval, calibrated)
+
+    typer.echo(f"\nEvaluation on {year}: {n} rows, {int(y_eval.sum())} winners")
+    typer.echo(f"AUC: {auc:.4f}")
+    for k, v in prec_at_k.items():
+        typer.echo(f"  {k}: {v:.1%}")
+
+    typer.echo("\nCalibration:")
+    for bucket in calibration:
+        typer.echo(f"  {bucket['bucket']:15s}: "
+                   f"predicted={bucket['mean_predicted']:.1%} "
+                   f"actual={bucket['actual_rate']:.1%} "
+                   f"n={bucket['count']}")
+
+    await dispose_engine()
+
+
 async def _sync_prices_async(
     concurrency: int,
     country_filter: str | None,
