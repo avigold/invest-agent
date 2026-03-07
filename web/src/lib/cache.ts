@@ -19,13 +19,19 @@ export function readCache<T>(key: string, ttl: number = CACHE_TTL): T | null {
   try {
     const raw = sessionStorage.getItem(key);
     if (!raw) return null;
-    const entry: CacheEntry<T> = JSON.parse(raw);
+    const entry = JSON.parse(raw);
+    // Reject old-format entries (raw data without {data, timestamp} wrapper)
+    if (!entry || typeof entry !== "object" || !("timestamp" in entry)) {
+      sessionStorage.removeItem(key);
+      return null;
+    }
     if (Date.now() - entry.timestamp > ttl) {
       sessionStorage.removeItem(key);
       return null;
     }
-    return entry.data;
+    return entry.data as T;
   } catch {
+    sessionStorage.removeItem(key);
     return null;
   }
 }
