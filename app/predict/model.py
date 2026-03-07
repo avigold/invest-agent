@@ -50,6 +50,10 @@ PARQUET_PARAMS: dict = {
     "bagging_freq": 5,
     "max_depth": -1,
     "verbose": -1,
+    "seed": 32,
+    "data_random_seed": 32,
+    "feature_fraction_seed": 32,
+    "bagging_seed": 32,
 }
 
 PARQUET_NUM_BOOST_ROUND = 1000

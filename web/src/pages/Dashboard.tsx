@@ -20,13 +20,24 @@ interface CompanyPreview {
   rank: number;
 }
 
-interface BuyRecommendation {
+interface MLScore {
+  id: string;
   ticker: string;
-  name: string;
-  country_iso2: string;
-  composite_score: number;
-  classification: string;
-  rank: number;
+  company_name: string;
+  country: string;
+  sector: string;
+  probability: number;
+  confidence_tier: string;
+  kelly_fraction: number;
+  suggested_weight: number;
+}
+
+interface LatestScores {
+  model_id: string;
+  model_version: string;
+  created_at: string;
+  aggregate_metrics: { mean_auc?: number };
+  scores: MLScore[];
 }
 
 interface IndustryPreview {
@@ -38,6 +49,17 @@ interface IndustryPreview {
   rank: number;
 }
 
+function fmtPct(v: number | undefined | null, decimals = 1): string {
+  return v != null ? `${(v * 100).toFixed(decimals)}%` : "\u2014";
+}
+
+const TIER_COLORS: Record<string, string> = {
+  high: "border-green-800 bg-green-900/50 text-green-400",
+  medium: "border-yellow-800 bg-yellow-900/50 text-yellow-300",
+  low: "border-gray-700 bg-gray-800 text-gray-300",
+  negligible: "border-gray-800 bg-gray-900 text-gray-500",
+};
+
 export default function Dashboard() {
   const { user, loading } = useUser();
   const navigate = useNavigate();
@@ -45,7 +67,8 @@ export default function Dashboard() {
   const [topCountries, setTopCountries] = useState<CountryPreview[]>([]);
   const [topCompanies, setTopCompanies] = useState<CompanyPreview[]>([]);
   const [topIndustries, setTopIndustries] = useState<IndustryPreview[]>([]);
-  const [topBuys, setTopBuys] = useState<BuyRecommendation[]>([]);
+  const [mlScores, setMlScores] = useState<MLScore[]>([]);
+  const [mlModel, setMlModel] = useState<{ version: string; auc?: number } | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -67,8 +90,14 @@ export default function Dashboard() {
       apiJson<IndustryPreview[]>("/v1/industries")
         .then((ind) => setTopIndustries(ind.slice(0, 5)))
         .catch(() => {});
-      apiJson<BuyRecommendation[]>("/v1/recommendations?classification=Buy")
-        .then((recs) => setTopBuys(recs.slice(0, 5)))
+      apiJson<LatestScores>("/v1/predictions/models/latest/scores")
+        .then((data) => {
+          setMlScores(data.scores.slice(0, 5));
+          setMlModel({
+            version: data.model_version,
+            auc: data.aggregate_metrics?.mean_auc,
+          });
+        })
         .catch(() => {});
     }
   }, [user]);
@@ -115,14 +144,23 @@ export default function Dashboard() {
         </div>
       )}
 
-      {topBuys.length > 0 && (
-        <div className="mb-8">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Top Buy Recommendations</h2>
-            <Link to="/recommendations" className="text-sm text-brand hover:underline">
-              View all
-            </Link>
+      {/* ML Picks — Hero section */}
+      <div className="mb-8">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Top ML Picks</h2>
+            {mlModel && (
+              <p className="text-xs text-gray-500">
+                Model: {mlModel.version}
+                {mlModel.auc != null && <> &middot; AUC {mlModel.auc.toFixed(3)}</>}
+              </p>
+            )}
           </div>
+          <Link to="/ml/picks" className="text-sm text-brand hover:underline">
+            View all
+          </Link>
+        </div>
+        {mlScores.length > 0 ? (
           <div className="rounded-lg border border-gray-800 bg-gray-900">
             <table className="w-full text-sm">
               <thead>
@@ -130,42 +168,65 @@ export default function Dashboard() {
                   <th className="px-4 py-2 w-12">#</th>
                   <th className="px-4 py-2">Company</th>
                   <th className="px-4 py-2">Country</th>
-                  <th className="px-4 py-2 text-right">Composite</th>
-                  <th className="px-4 py-2 text-center">Signal</th>
+                  <th className="px-4 py-2 text-right">Probability</th>
+                  <th className="px-4 py-2 text-center">Confidence</th>
+                  <th className="px-4 py-2 text-right">Kelly</th>
+                  <th className="px-4 py-2 text-right">Weight</th>
                 </tr>
               </thead>
               <tbody>
-                {topBuys.map((r) => (
+                {mlScores.map((s, i) => (
                   <tr
-                    key={r.ticker}
+                    key={s.id}
                     className="border-b border-gray-800/50 hover:bg-gray-800/30"
                   >
-                    <td className="px-4 py-2 text-gray-500">{r.rank}</td>
+                    <td className="px-4 py-2 text-gray-500">{i + 1}</td>
                     <td className="px-4 py-2">
                       <Link
-                        to={`/recommendations/${r.ticker}`}
+                        to={`/companies/${s.ticker}`}
                         className="text-white hover:text-brand"
                       >
-                        {r.name}
+                        {s.company_name || s.ticker}
                       </Link>
-                      <span className="ml-2 text-xs text-gray-600">{r.ticker}</span>
+                      <span className="ml-2 text-xs text-gray-600">{s.ticker}</span>
                     </td>
-                    <td className="px-4 py-2 text-gray-400">{r.country_iso2}</td>
-                    <td className="px-4 py-2 text-right font-mono font-bold text-green-400">
-                      {r.composite_score.toFixed(1)}
+                    <td className="px-4 py-2 font-mono text-gray-400">{s.country || "\u2014"}</td>
+                    <td className="px-4 py-2 text-right font-mono font-bold text-white">
+                      {fmtPct(s.probability)}
                     </td>
                     <td className="px-4 py-2 text-center">
-                      <span className="inline-block rounded-full border border-green-800 bg-green-900/50 px-3 py-0.5 text-xs font-bold text-green-400">
-                        Buy
+                      <span
+                        className={`inline-block rounded-full border px-2 py-0.5 text-xs font-bold ${
+                          TIER_COLORS[s.confidence_tier] ?? TIER_COLORS.negligible
+                        }`}
+                      >
+                        {s.confidence_tier}
                       </span>
+                    </td>
+                    <td className="px-4 py-2 text-right font-mono text-gray-400">
+                      {fmtPct(s.kelly_fraction)}
+                    </td>
+                    <td className="px-4 py-2 text-right font-mono text-gray-400">
+                      {s.suggested_weight > 0 ? fmtPct(s.suggested_weight) : "\u2014"}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="rounded-lg border border-gray-800 bg-gray-900 p-6 text-center">
+            <p className="text-gray-400">No ML scores available yet.</p>
+            <p className="mt-2 text-xs text-gray-600">
+              Run{" "}
+              <code className="rounded bg-gray-800 px-1.5 py-0.5 text-xs">
+                python -m app.cli score-universe
+              </code>{" "}
+              to score the universe.
+            </p>
+          </div>
+        )}
+      </div>
 
       {topCompanies.length > 0 && (
         <div className="mb-8">

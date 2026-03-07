@@ -14,6 +14,24 @@ from app.db.session import get_db
 router = APIRouter(prefix="/v1/predictions", tags=["predictions"])
 
 
+def _score_dict(s: PredictionScore) -> dict:
+    """Serialize a PredictionScore to a response dict."""
+    return {
+        "id": str(s.id),
+        "ticker": s.ticker,
+        "company_name": s.company_name,
+        "country": s.country or (s.contributing_features or {}).get("country", ""),
+        "sector": s.sector or (s.contributing_features or {}).get("sector", ""),
+        "probability": s.probability,
+        "confidence_tier": s.confidence_tier,
+        "kelly_fraction": s.kelly_fraction,
+        "suggested_weight": s.suggested_weight,
+        "contributing_features": s.contributing_features,
+        "feature_values": s.feature_values,
+        "scored_at": s.scored_at.isoformat(),
+    }
+
+
 @router.get("/models")
 async def list_models(
     user: User = Depends(get_current_user),
@@ -43,6 +61,37 @@ async def list_models(
         }
         for m in rows
     ]
+
+
+@router.get("/models/latest/scores")
+async def get_latest_model_scores(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get prediction scores for the most recent model."""
+    result = await db.execute(
+        select(PredictionModel)
+        .where(PredictionModel.user_id == user.id)
+        .order_by(desc(PredictionModel.created_at))
+        .limit(1)
+    )
+    model = result.scalar_one_or_none()
+    if model is None:
+        raise HTTPException(status_code=404, detail="No models found")
+
+    result = await db.execute(
+        select(PredictionScore)
+        .where(PredictionScore.model_id == model.id)
+        .order_by(desc(PredictionScore.probability))
+    )
+    scores = result.scalars().all()
+    return {
+        "model_id": str(model.id),
+        "model_version": model.model_version,
+        "created_at": model.created_at.isoformat(),
+        "aggregate_metrics": model.aggregate_metrics,
+        "scores": [_score_dict(s) for s in scores],
+    }
 
 
 @router.get("/models/{model_id}")
@@ -100,21 +149,7 @@ async def get_model_scores(
         .order_by(desc(PredictionScore.probability))
     )
     scores = result.scalars().all()
-    return [
-        {
-            "id": str(s.id),
-            "ticker": s.ticker,
-            "company_name": s.company_name,
-            "probability": s.probability,
-            "confidence_tier": s.confidence_tier,
-            "kelly_fraction": s.kelly_fraction,
-            "suggested_weight": s.suggested_weight,
-            "contributing_features": s.contributing_features,
-            "feature_values": s.feature_values,
-            "scored_at": s.scored_at.isoformat(),
-        }
-        for s in scores
-    ]
+    return [_score_dict(s) for s in scores]
 
 
 @router.delete("/models/{model_id}", status_code=204)

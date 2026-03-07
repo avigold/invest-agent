@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
+import { readCache, writeCache, clearCache } from "@/lib/cache";
 import CompanyTable, { CompanyRow } from "@/components/CompanyTable";
+
+const PAGE_SIZE = 25;
 
 const GICS_SECTORS: { code: string; name: string }[] = [
   { code: "10", name: "Energy" },
@@ -34,30 +37,69 @@ const COUNTRIES: { code: string; name: string }[] = [
 export default function Companies() {
   const { user, loading } = useUser();
   const navigate = useNavigate();
-  const [companies, setCompanies] = useState<CompanyRow[]>([]);
+  // First page (fast initial load when no cache)
+  const [firstPage, setFirstPage] = useState<CompanyRow[] | null>(null);
+  // Full dataset (from cache or background fetch)
+  const [allCompanies, setAllCompanies] = useState<CompanyRow[] | null>(null);
   const [search, setSearch] = useState("");
   const [sectorFilter, setSectorFilter] = useState("");
   const [countryFilter, setCountryFilter] = useState("");
+  const [page, setPage] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const fetchId = useRef(0);
+  const [flushKey, setFlushKey] = useState(0);
 
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
 
-  const loadCompanies = (gicsCode?: string, countryIso2?: string) => {
-    const params = new URLSearchParams();
-    if (gicsCode) params.set("gics_code", gicsCode);
-    if (countryIso2) params.set("country_iso2", countryIso2);
-    const qs = params.toString();
-    apiJson<CompanyRow[]>(`/v1/companies${qs ? `?${qs}` : ""}`)
-      .then(setCompanies)
-      .catch(() => {});
-  };
-
   useEffect(() => {
-    if (user) loadCompanies(sectorFilter || undefined, countryFilter || undefined);
-  }, [user, sectorFilter, countryFilter]);
+    if (!user) return;
+    const id = ++fetchId.current;
+    const key = `companies:${sectorFilter}:${countryFilter}`;
+
+    // Try cache first
+    const cached = readCache<CompanyRow[]>(key);
+    if (cached) {
+      setAllCompanies(cached);
+      setFirstPage(cached.slice(0, PAGE_SIZE));
+    } else {
+      setFirstPage(null);
+      setAllCompanies(null);
+    }
+
+    const params = new URLSearchParams();
+    if (sectorFilter) params.set("gics_code", sectorFilter);
+    if (countryFilter) params.set("country_iso2", countryFilter);
+    const qs = params.toString();
+    const base = `/v1/companies${qs ? `?${qs}` : ""}`;
+
+    // If no cache, fetch first page fast
+    if (!cached) {
+      const sep = qs ? "&" : "?";
+      apiJson<CompanyRow[]>(`${base}${sep}limit=${PAGE_SIZE}`)
+        .then((rows) => { if (fetchId.current === id) setFirstPage(rows); })
+        .catch(() => { if (fetchId.current === id) setFirstPage([]); });
+    }
+
+    // Always fetch full dataset in background (refreshes cache)
+    apiJson<CompanyRow[]>(base)
+      .then((rows) => {
+        if (fetchId.current === id) {
+          setAllCompanies(rows);
+          writeCache(key, rows);
+        }
+      })
+      .catch(() => { if (fetchId.current === id && !cached) setAllCompanies([]); });
+  }, [user, sectorFilter, countryFilter, flushKey]);
+
+  const handleFlush = useCallback(() => {
+    clearCache("companies:");
+    setFirstPage(null);
+    setAllCompanies(null);
+    setFlushKey((k) => k + 1);
+  }, []);
 
   const submitRefresh = async () => {
     setSubmitting(true);
@@ -79,6 +121,16 @@ export default function Companies() {
     }
   };
 
+  // Reset page when filters or search change
+  useEffect(() => {
+    setPage(1);
+  }, [search, sectorFilter, countryFilter]);
+
+  // Use full dataset when available, otherwise first page
+  const hasAll = allCompanies !== null;
+  const companies = allCompanies ?? firstPage ?? [];
+  const totalCount = firstPage?.[0]?.rank_total ?? companies.length;
+
   const q = search.toLowerCase();
   const filtered = q
     ? companies.filter(
@@ -88,14 +140,38 @@ export default function Companies() {
       )
     : companies;
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const visible = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  const initialLoading = firstPage === null;
+
   if (loading || !user) return null;
 
   return (
     <div>
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold text-white">Companies</h1>
+          <h1 className="text-2xl font-bold text-white">
+            Companies
+            {!initialLoading && (
+              <span className="ml-2 text-base font-normal text-gray-500">
+                {q && hasAll
+                  ? `${filtered.length} of ${totalCount}`
+                  : `${totalCount}`}
+              </span>
+            )}
+          </h1>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleFlush}
+              title="Clear cache and reload"
+              className="rounded-lg border border-gray-700 bg-gray-800 p-2 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
             <Link
               to="/companies/add"
               className="rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700"
@@ -111,14 +187,21 @@ export default function Companies() {
             </button>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name or ticker..."
-            className="min-w-0 flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 placeholder-gray-500 sm:flex-none sm:w-52"
-          />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-0 flex-1 sm:flex-none sm:w-52">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or ticker..."
+              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 pr-8 text-sm text-gray-300 placeholder-gray-500"
+            />
+            {q && !hasAll && (
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-600 border-t-gray-400" />
+              </div>
+            )}
+          </div>
           <select
             value={countryFilter}
             onChange={(e) => setCountryFilter(e.target.value)}
@@ -153,8 +236,42 @@ export default function Companies() {
       )}
 
       <div className="rounded-lg border border-gray-800 bg-gray-900">
-        <CompanyTable companies={filtered} />
+        {initialLoading ? (
+          <div className="flex items-center justify-center p-12">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-gray-300" />
+            <span className="ml-3 text-sm text-gray-500">Loading companies...</span>
+          </div>
+        ) : (
+          <CompanyTable companies={visible} />
+        )}
       </div>
+
+      {!initialLoading && totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-between text-sm">
+          <span className="text-gray-500">
+            {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage(safePage - 1)}
+              disabled={safePage <= 1}
+              className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-gray-300 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Prev
+            </button>
+            <span className="text-gray-400">
+              Page {safePage} of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage(safePage + 1)}
+              disabled={safePage >= totalPages}
+              className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-gray-300 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

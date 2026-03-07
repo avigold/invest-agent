@@ -86,7 +86,7 @@ export default function RecommendationTable({
               <td className="px-4 py-3 text-gray-500">{row.rank}</td>
               <td className="px-4 py-3">
                 <Link
-                  to={`/recommendations/${row.ticker}`}
+                  to={`/fundamentals/${row.ticker}`}
                   className="text-white hover:text-brand transition-colors"
                 >
                   {row.name}

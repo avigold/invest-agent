@@ -13,6 +13,50 @@ The interaction model mirrors the job-queue-per-user design used in the user’s
 - Failures are visible: job logs are first-class and streamable.
 - Minimal ambiguity: implement exactly what `SPEC.md` and `ACCEPTANCE.md` say.
 
+## ML Model Protection (CRITICAL — read every word)
+
+Trained ML models are the most valuable asset in this project. Violating any rule below is a **blocking failure**. No exceptions. No shortcuts.
+
+### Rules
+
+1. **NEVER delete a PredictionModel row** from the database unless the user explicitly says "delete model X". Cascade deletes to PredictionScore are equally dangerous.
+2. **NEVER retrain or re-score** without the user's explicit approval in that conversation. "Score the universe" does NOT mean "retrain first." Ask.
+3. **NEVER modify `PARQUET_PARAMS`**, `PARQUET_FOLD_YEARS`, `PARQUET_HOLDOUT_YEAR`, or any training hyperparameter in `app/predict/model.py` without explicit user approval.
+4. **NEVER modify or delete** files in `data/models/`, `data/exports/backtest_portfolio*.xlsx`, `scripts/gen_excel_deduped.py`, or `scripts/seed_sweep*.py`. These are golden artifacts.
+5. **Every trained model** must be saved to BOTH the database AND a file in `data/models/` with a descriptive name. The DB can be wiped; the file cannot be easily recovered.
+6. **Every training run** must log the full config (seed, countries, thresholds, all hyperparameters) to both the model's `config` JSONB field and the console output.
+7. **Before scoring**, always confirm which model ID to use. Never assume "latest."
+
+### Golden Model Config (Seed 32)
+
+This is the configuration that produced 84.5% average annual return across 2018-2024 backtests. It must be reproducible at any time.
+
+```
+Seed: 32 (set on seed, data_random_seed, feature_fraction_seed, bagging_seed)
+Countries (24, NO INDIA): US,GB,CA,AU,DE,FR,JP,CH,SE,NL,KR,BR,ZA,SG,HK,NO,DK,FI,IL,NZ,TW,IE,BE,AT
+min_dollar_volume: 500,000
+max_return_clip: 10.0
+return_threshold: 0.20
+relative_to_country: True
+half_life: 7.0
+min_fiscal_year: 2000
+num_leaves: 63
+min_data_in_leaf: 50
+learning_rate: 0.05
+feature_fraction: 0.6
+bagging_fraction: 0.7
+bagging_freq: 5
+num_boost_round: 1000
+early_stopping_rounds: 50
+scale_pos_weight: NOT USED (critical — production train_walk_forward_parquet adds this but the backtest script does not)
+Deduplication: by company_name.strip().lower(), keep highest-scored listing
+```
+
+Reproduction script: `scripts/gen_excel_deduped.py`
+Backup sweep scripts: `scripts/seed_sweep.py`, `scripts/seed_sweep_no_india.py`
+Model blob backup: `data/models/seed32_v1.pkl` (after training)
+Backtest output: `data/exports/backtest_portfolio_deduped.xlsx`
+
 ## Scope ordering
 Build in this order, with acceptance tests per milestone:
 1) Auth + users + subscriptions + job system (multi-tenant)
@@ -164,6 +208,10 @@ Industry/company endpoints follow the same decision-packet pattern.
 - A daily scheduler enqueues per-user or global refresh jobs, depending on product design.
 - For shared datasets (country/market), compute once and cache; per-user jobs reference shared artefacts/scores.
 - For user-specific universes/watchlists, compute user-tailored packets by joining against shared data.
+
+## Writing style
+- Always use British spellings (e.g. standardise, colour, behaviour, centre, analyse, organisation, favour, licence, etc.)
+- This applies to code comments, PRDs, commit messages, and all written output
 
 ## Implementation rules for Claude
 - **PRD-first workflow**: Every plan must produce a PRD at `docs/product/prd_X_Y.md` **before** any code is written. The PRD documents: problem statement, solution design, data sources, API surface, data model changes, files changed, and acceptance criteria. Major milestones use `prd_X_0.md`; incremental features use `prd_X_Y.md`. The PRD is the source of truth — code implements what the PRD specifies.

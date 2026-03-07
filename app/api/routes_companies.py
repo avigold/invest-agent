@@ -29,6 +29,8 @@ router = APIRouter(prefix="/v1", tags=["companies"])
 async def list_companies(
     gics_code: str | None = Query(None, description="Filter by GICS sector code"),
     country_iso2: str | None = Query(None, description="Filter by country ISO2 code"),
+    limit: int | None = Query(None, ge=1, description="Max results to return"),
+    offset: int | None = Query(None, ge=0, description="Results to skip"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -58,7 +60,7 @@ async def list_companies(
     scored_at_result = await db.execute(scored_at_q)
     scored_at = scored_at_result.scalar_one_or_none()
 
-    scores_q = (
+    base_q = (
         select(CompanyScore, Company)
         .join(Company, CompanyScore.company_id == Company.id)
         .where(
@@ -67,16 +69,34 @@ async def list_companies(
         )
     )
     if gics_code:
-        scores_q = scores_q.where(Company.gics_code == gics_code)
+        base_q = base_q.where(Company.gics_code == gics_code)
     if country_iso2:
-        scores_q = scores_q.where(Company.country_iso2 == country_iso2)
-    scores_q = scores_q.order_by(desc(CompanyScore.overall_score))
+        base_q = base_q.where(Company.country_iso2 == country_iso2)
+    base_q = base_q.order_by(desc(CompanyScore.overall_score))
+
+    # Total count (needed when limit is used)
+    if limit is not None:
+        from sqlalchemy import func
+        count_q = select(func.count()).select_from(base_q.subquery())
+        total = (await db.execute(count_q)).scalar() or 0
+    else:
+        total = None  # computed from len(rows) below
+
+    scores_q = base_q
+    if offset:
+        scores_q = scores_q.offset(offset)
+    if limit is not None:
+        scores_q = scores_q.limit(limit)
 
     result = await db.execute(scores_q)
     rows = result.all()
 
+    if total is None:
+        total = len(rows)
+
+    rank_start = (offset or 0) + 1
     items = []
-    for rank, (score, company) in enumerate(rows, 1):
+    for i, (score, company) in enumerate(rows):
         items.append({
             "ticker": company.ticker,
             "name": company.name,
@@ -86,8 +106,8 @@ async def list_companies(
             "fundamental_score": float(score.fundamental_score),
             "market_score": float(score.market_score),
             "industry_context_score": float(score.industry_context_score),
-            "rank": rank,
-            "rank_total": len(rows),
+            "rank": rank_start + i,
+            "rank_total": total,
             "as_of": str(score.as_of),
             "scored_at": scored_at.isoformat() if scored_at else None,
             "calc_version": score.calc_version,

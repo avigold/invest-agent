@@ -177,7 +177,7 @@ export default function RecommendationDetail() {
   if (error) {
     return (
       <div>
-        <Link to="/recommendations" className="mb-4 inline-block text-sm text-brand hover:underline">
+        <Link to="/fundamentals" className="mb-4 inline-block text-sm text-brand hover:underline">
           &larr; Back to Recommendations
         </Link>
         <div className="rounded border border-red-800 bg-red-900/30 px-4 py-3 text-red-300">
@@ -195,7 +195,7 @@ export default function RecommendationDetail() {
 
   return (
     <div>
-      <Link to="/recommendations" className="mb-6 inline-block text-sm text-gray-400 hover:text-white">
+      <Link to="/fundamentals" className="mb-6 inline-block text-sm text-gray-400 hover:text-white">
         &larr; All recommendations
       </Link>
 

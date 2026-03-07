@@ -483,6 +483,8 @@ class PredictionScore(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     ticker: Mapped[str] = mapped_column(String(20), nullable=False)
     company_name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    country: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    sector: Mapped[str | None] = mapped_column(String(100), nullable=True)
     probability: Mapped[float] = mapped_column(Float, nullable=False)
     confidence_tier: Mapped[str] = mapped_column(String(20), nullable=False)
     kelly_fraction: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)

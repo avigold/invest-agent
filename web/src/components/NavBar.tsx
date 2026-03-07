@@ -1,20 +1,167 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useRef, useEffect } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 
-const NAV_LINKS = [
-  { to: "/countries", label: "Countries" },
-  { to: "/industries", label: "Industries" },
-  { to: "/companies", label: "Companies" },
-  { to: "/recommendations", label: "Recommendations" },
-  { to: "/screener", label: "Screener" },
-  { to: "/predictions", label: "Predictions" },
-  { to: "/jobs", label: "Jobs" },
+interface NavItem {
+  to: string;
+  label: string;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    label: "Research",
+    items: [
+      { to: "/countries", label: "Countries" },
+      { to: "/industries", label: "Industries" },
+      { to: "/companies", label: "Companies" },
+    ],
+  },
+  {
+    label: "Signals",
+    items: [
+      { to: "/ml/picks", label: "ML Picks" },
+      { to: "/ml/models", label: "Models" },
+      { to: "/fundamentals", label: "Fundamentals" },
+      { to: "/screener", label: "Screener" },
+    ],
+  },
+  {
+    label: "System",
+    items: [
+      { to: "/jobs", label: "Jobs" },
+    ],
+  },
 ];
+
+function isGroupActive(group: NavGroup, pathname: string): boolean {
+  return group.items.some(
+    (item) => pathname === item.to || pathname.startsWith(item.to + "/"),
+  );
+}
+
+function DesktopDropdown({ group }: { group: NavGroup }) {
+  const [open, setOpen] = useState(false);
+  const timeout = useRef<ReturnType<typeof setTimeout>>();
+  const location = useLocation();
+  const active = isGroupActive(group, location.pathname);
+
+  const enter = () => {
+    clearTimeout(timeout.current);
+    setOpen(true);
+  };
+  const leave = () => {
+    timeout.current = setTimeout(() => setOpen(false), 150);
+  };
+
+  useEffect(() => () => clearTimeout(timeout.current), []);
+
+  return (
+    <div className="relative" onMouseEnter={enter} onMouseLeave={leave}>
+      <button
+        onClick={() => setOpen(!open)}
+        className={`flex items-center gap-1 text-sm ${
+          active ? "text-white" : "text-gray-400 hover:text-white"
+        }`}
+      >
+        {group.label}
+        <svg
+          className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`}
+          fill="none"
+          viewBox="0 0 12 12"
+        >
+          <path d="M3 5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-2 min-w-[10rem] rounded-lg border border-gray-700 bg-gray-900 py-1 shadow-xl">
+          {group.items.map((item) => {
+            const itemActive =
+              location.pathname === item.to ||
+              location.pathname.startsWith(item.to + "/");
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                onClick={() => setOpen(false)}
+                className={`block px-4 py-2 text-sm ${
+                  itemActive
+                    ? "bg-gray-800 text-white"
+                    : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MobileGroup({
+  group,
+  onNavigate,
+}: {
+  group: NavGroup;
+  onNavigate: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const location = useLocation();
+  const active = isGroupActive(group, location.pathname);
+
+  return (
+    <div>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm ${
+          active ? "text-white" : "text-gray-300"
+        } hover:bg-gray-800`}
+      >
+        {group.label}
+        <svg
+          className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`}
+          fill="none"
+          viewBox="0 0 12 12"
+        >
+          <path d="M3 5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      </button>
+      {expanded && (
+        <div className="ml-3 mt-1 flex flex-col gap-0.5">
+          {group.items.map((item) => {
+            const itemActive =
+              location.pathname === item.to ||
+              location.pathname.startsWith(item.to + "/");
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                onClick={onNavigate}
+                className={`rounded-lg px-3 py-1.5 text-sm ${
+                  itemActive
+                    ? "bg-gray-800 text-white"
+                    : "text-gray-400 hover:bg-gray-800 hover:text-white"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function NavBar() {
   const { user, loading, logout } = useUser();
-  const [open, setOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <nav className="border-b border-gray-800 bg-gray-900">
@@ -44,14 +191,8 @@ export default function NavBar() {
         {/* Desktop nav */}
         {user && (
           <div className="hidden lg:flex items-center gap-6">
-            {NAV_LINKS.map((l) => (
-              <Link
-                key={l.to}
-                to={l.to}
-                className="text-sm text-gray-400 hover:text-white"
-              >
-                {l.label}
-              </Link>
+            {NAV_GROUPS.map((g) => (
+              <DesktopDropdown key={g.label} group={g} />
             ))}
             {user.role === "admin" && (
               <Link to="/admin" className="text-sm text-purple-400 hover:text-purple-300">
@@ -88,41 +229,38 @@ export default function NavBar() {
 
         {/* Mobile hamburger */}
         <button
-          onClick={() => setOpen(!open)}
+          onClick={() => setMobileOpen(!mobileOpen)}
           className="lg:hidden flex flex-col items-center justify-center w-8 h-8 gap-1.5"
           aria-label="Toggle menu"
         >
           <span
-            className={`block h-0.5 w-5 bg-gray-400 transition-transform ${open ? "translate-y-2 rotate-45" : ""}`}
+            className={`block h-0.5 w-5 bg-gray-400 transition-transform ${mobileOpen ? "translate-y-2 rotate-45" : ""}`}
           />
           <span
-            className={`block h-0.5 w-5 bg-gray-400 transition-opacity ${open ? "opacity-0" : ""}`}
+            className={`block h-0.5 w-5 bg-gray-400 transition-opacity ${mobileOpen ? "opacity-0" : ""}`}
           />
           <span
-            className={`block h-0.5 w-5 bg-gray-400 transition-transform ${open ? "-translate-y-2 -rotate-45" : ""}`}
+            className={`block h-0.5 w-5 bg-gray-400 transition-transform ${mobileOpen ? "-translate-y-2 -rotate-45" : ""}`}
           />
         </button>
       </div>
 
       {/* Mobile menu */}
-      {open && (
+      {mobileOpen && (
         <div className="lg:hidden border-t border-gray-800 px-4 pb-4 pt-2">
           {user && (
             <div className="flex flex-col gap-1">
-              {NAV_LINKS.map((l) => (
-                <Link
-                  key={l.to}
-                  to={l.to}
-                  onClick={() => setOpen(false)}
-                  className="rounded-lg px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white"
-                >
-                  {l.label}
-                </Link>
+              {NAV_GROUPS.map((g) => (
+                <MobileGroup
+                  key={g.label}
+                  group={g}
+                  onNavigate={() => setMobileOpen(false)}
+                />
               ))}
               {user.role === "admin" && (
                 <Link
                   to="/admin"
-                  onClick={() => setOpen(false)}
+                  onClick={() => setMobileOpen(false)}
                   className="rounded-lg px-3 py-2 text-sm text-purple-400 hover:bg-gray-800 hover:text-purple-300"
                 >
                   Admin
@@ -141,7 +279,7 @@ export default function NavBar() {
                 </div>
                 <button
                   onClick={() => {
-                    setOpen(false);
+                    setMobileOpen(false);
                     logout();
                   }}
                   className="text-sm text-gray-400 hover:text-white"
@@ -152,7 +290,7 @@ export default function NavBar() {
             ) : (
               <Link
                 to="/login"
-                onClick={() => setOpen(false)}
+                onClick={() => setMobileOpen(false)}
                 className="block rounded bg-brand px-3 py-1.5 text-center text-sm font-medium text-white hover:bg-brand-dark"
               >
                 Sign in

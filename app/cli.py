@@ -467,6 +467,142 @@ async def _store_trained_model(trained) -> None:
 
 
 @app_cli.command()
+def score_universe(
+    parquet_path: str = typer.Option(
+        "data/exports/training_features.parquet",
+        help="Path to training features Parquet file",
+    ),
+    model_id: Optional[str] = typer.Option(None, help="Model UUID (default: latest)"),
+):
+    """Score the universe using a trained ML model.
+
+    Loads a trained model from the database, scores all stocks from the
+    Parquet export, applies Kelly sizing with portfolio constraints, and
+    stores PredictionScore rows.
+
+    Usage:
+        python -m app.cli score-universe
+        python -m app.cli score-universe --model-id UUID
+    """
+    import asyncio
+    asyncio.run(_score_universe_async(parquet_path, model_id))
+
+
+async def _score_universe_async(parquet_path: str, model_id: str | None) -> None:
+    """Async implementation of score-universe."""
+    import uuid as uuid_mod
+    from datetime import datetime, timezone
+
+    from sqlalchemy import delete as sql_delete, select
+
+    from app.db.models import PredictionModel, PredictionScore, User
+    from app.db.session import _get_session_factory, dispose_engine
+    from app.predict.model import TrainedModel
+    from app.predict.parquet_scorer import score_from_parquet
+
+    sf = _get_session_factory()
+
+    # Load model from DB
+    async with sf() as db:
+        if model_id:
+            query = select(PredictionModel).where(
+                PredictionModel.id == uuid_mod.UUID(model_id)
+            )
+        else:
+            query = (
+                select(PredictionModel)
+                .order_by(PredictionModel.created_at.desc())
+                .limit(1)
+            )
+        result = await db.execute(query)
+        model_row = result.scalars().first()
+
+    if not model_row:
+        typer.echo("No model found in database.")
+        await dispose_engine()
+        return
+
+    typer.echo(f"Model: {model_row.id} ({model_row.model_version}, "
+               f"created {model_row.created_at})")
+
+    trained = TrainedModel.deserialize(
+        model_row.model_blob,
+        feature_importance=model_row.feature_importance,
+        train_config=model_row.config,
+    )
+
+    # Score
+    scored = score_from_parquet(
+        parquet_path=parquet_path,
+        model=trained,
+        model_config=model_row.config or {},
+        log_fn=typer.echo,
+    )
+
+    if not scored:
+        typer.echo("No stocks scored.")
+        await dispose_engine()
+        return
+
+    # Store PredictionScore rows
+    async with sf() as db:
+        # Get user
+        result = await db.execute(select(User).limit(1))
+        user = result.scalars().first()
+        if not user:
+            typer.echo("ERROR: No users in database.")
+            await dispose_engine()
+            return
+
+        # Delete old scores for this model
+        await db.execute(
+            sql_delete(PredictionScore).where(
+                PredictionScore.model_id == model_row.id
+            )
+        )
+
+        now = datetime.now(tz=timezone.utc)
+        for s in scored:
+            # Include country and sector in contributing_features
+            contrib = {"country": s.country, "sector": s.sector, **s.contributing_features}
+
+            db.add(PredictionScore(
+                id=uuid_mod.uuid4(),
+                model_id=model_row.id,
+                user_id=user.id,
+                ticker=s.ticker,
+                company_name=s.company_name,
+                country=s.country,
+                sector=s.sector,
+                probability=s.probability,
+                confidence_tier=s.confidence,
+                kelly_fraction=s.kelly,
+                suggested_weight=s.suggested_weight,
+                contributing_features=contrib,
+                feature_values=s.feature_values,
+                scored_at=now,
+            ))
+
+        await db.commit()
+
+    typer.echo(f"\nStored {len(scored)} PredictionScore rows for model {model_row.id}")
+
+    # Print top 20
+    typer.echo(f"\n{'Rank':>4} {'Ticker':12} {'Country':8} {'Prob':>8} {'Kelly':>8} {'Weight':>8}")
+    typer.echo("-" * 58)
+    for i, s in enumerate(scored[:20], 1):
+        typer.echo(
+            f"{i:4d} {s.ticker:12} {s.country:8} "
+            f"{s.probability:7.1%} {s.kelly:7.1%} "
+            f"{s.suggested_weight:7.1%}" if s.suggested_weight > 0
+            else f"{i:4d} {s.ticker:12} {s.country:8} "
+                 f"{s.probability:7.1%} {s.kelly:7.1%}       —"
+        )
+
+    await dispose_engine()
+
+
+@app_cli.command()
 def evaluate_model(
     parquet_path: str = typer.Option(
         "data/exports/training_features.parquet",
