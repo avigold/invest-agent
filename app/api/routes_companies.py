@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.db.models import (
     Company,
+    CompanyPriceHistory,
     CompanyScore,
     CompanySeries,
     CompanySeriesPoint,
@@ -166,62 +167,66 @@ async def company_chart(
     if company is None:
         raise HTTPException(status_code=404, detail=f"Company '{ticker}' not found")
 
-    # Find the equity_close series
-    result = await db.execute(
-        select(CompanySeries).where(
-            CompanySeries.company_id == company.id,
-            CompanySeries.series_name == "equity_close",
-        )
-    )
-    series = result.scalar_one_or_none()
-    if series is None:
-        return JSONResponse(
-            content={
-                "ticker": company.ticker,
-                "currency": "USD",
-                "period": period,
-                "points": [],
-                "latest": None,
-                "market_status": get_market_status(company.country_iso2),
-            },
-            headers={"Cache-Control": "private, max-age=3600"},
-        )
-
     start_date = date.today() - timedelta(days=PERIOD_DAYS[period])
-    result = await db.execute(
-        select(CompanySeriesPoint)
-        .where(
-            CompanySeriesPoint.series_id == series.id,
-            CompanySeriesPoint.date >= start_date,
-        )
-        .order_by(CompanySeriesPoint.date.asc())
-    )
-    points = result.scalars().all()
+    start_str = str(start_date)
 
-    points_list = [{"date": str(p.date), "value": float(p.value)} for p in points]
+    # Try JSONB price history first (fast path)
+    result = await db.execute(
+        select(CompanyPriceHistory).where(
+            CompanyPriceHistory.company_id == company.id,
+        )
+    )
+    ph = result.scalar_one_or_none()
+
+    points_list: list[dict] = []
+    if ph and ph.prices:
+        for p in ph.prices:
+            if p["date"] >= start_str:
+                price_val = p.get("price") or p.get("close")
+                if price_val is not None:
+                    points_list.append({"date": p["date"], "value": float(price_val)})
+    else:
+        # Fallback to legacy CompanySeries/CompanySeriesPoint
+        result = await db.execute(
+            select(CompanySeries).where(
+                CompanySeries.company_id == company.id,
+                CompanySeries.series_name == "equity_close",
+            )
+        )
+        series = result.scalar_one_or_none()
+        if series is not None:
+            result = await db.execute(
+                select(CompanySeriesPoint)
+                .where(
+                    CompanySeriesPoint.series_id == series.id,
+                    CompanySeriesPoint.date >= start_date,
+                )
+                .order_by(CompanySeriesPoint.date.asc())
+            )
+            points_list = [{"date": str(p.date), "value": float(p.value)} for p in result.scalars().all()]
 
     # Compute latest change
     latest = None
-    if len(points) >= 2:
-        last = points[-1]
-        prev = points[-2]
-        change = float(last.value) - float(prev.value)
-        pct = change / float(prev.value) if float(prev.value) != 0 else 0
+    if len(points_list) >= 2:
+        last = points_list[-1]
+        prev = points_list[-2]
+        change = last["value"] - prev["value"]
+        pct = change / prev["value"] if prev["value"] != 0 else 0
         latest = {
-            "date": str(last.date),
-            "value": float(last.value),
+            "date": last["date"],
+            "value": last["value"],
             "change_1d": round(change, 4),
             "change_1d_pct": round(pct, 6),
-            "prev_close": float(prev.value),
+            "prev_close": prev["value"],
         }
-    elif len(points) == 1:
-        last = points[0]
+    elif len(points_list) == 1:
+        last = points_list[0]
         latest = {
-            "date": str(last.date),
-            "value": float(last.value),
+            "date": last["date"],
+            "value": last["value"],
             "change_1d": 0,
             "change_1d_pct": 0,
-            "prev_close": float(last.value),
+            "prev_close": last["value"],
         }
 
     market_status = get_market_status(company.country_iso2)

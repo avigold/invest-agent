@@ -5,11 +5,14 @@ from datetime import date
 from decimal import Decimal
 from typing import Callable
 
-from sqlalchemy import select, desc
+from collections import defaultdict
+
+from sqlalchemy import select, desc, func, literal_column, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import (
     Company,
+    CompanyPriceHistory,
     CompanyRiskRegister,
     CompanyScore,
     CompanySeries,
@@ -40,35 +43,48 @@ async def _load_latest_fundamentals(
 ) -> dict[str, dict[str, list[float]]]:
     """Load the 2 most recent annual values per fundamental metric per company.
 
+    Uses a single batch query with ROW_NUMBER() window function instead of
+    one query per company.
+
     Returns {ticker: {series_name: [latest_val, prior_val]}}.
     """
-    result: dict[str, dict[str, list[float]]] = {}
+    if not companies:
+        return {}
 
-    for company in companies:
-        fundamentals: dict[str, list[float]] = {}
+    company_ids = [c.id for c in companies]
+    ticker_map = {c.id: c.ticker for c in companies}
+    result: dict[str, dict[str, list[float]]] = {c.ticker: {} for c in companies}
 
-        query = (
-            select(CompanySeries.series_name, CompanySeriesPoint.value, CompanySeriesPoint.date)
-            .join(CompanySeries)
-            .where(
-                CompanySeries.company_id == company.id,
-                CompanySeries.source.in_(["sec_edgar", "yfinance"]),
-            )
-            .order_by(CompanySeries.series_name, CompanySeriesPoint.date.desc())
+    # Window function: rank points within each (company, series) by date desc
+    rn = func.row_number().over(
+        partition_by=[CompanySeries.company_id, CompanySeries.series_name],
+        order_by=CompanySeriesPoint.date.desc(),
+    ).label("rn")
+
+    subq = (
+        select(
+            CompanySeries.company_id,
+            CompanySeries.series_name,
+            CompanySeriesPoint.value,
+            rn,
         )
-        rows = await db.execute(query)
+        .join(CompanySeries)
+        .where(
+            CompanySeries.company_id.in_(company_ids),
+            CompanySeries.source.in_(["sec_edgar", "yfinance", "fmp"]),
+        )
+        .subquery()
+    )
 
-        current_series = None
-        count = 0
-        for row in rows.all():
-            if row.series_name != current_series:
-                current_series = row.series_name
-                count = 0
-            if count < 2:
-                fundamentals.setdefault(row.series_name, []).append(float(row.value))
-                count += 1
+    query = select(subq).where(subq.c.rn <= 2).order_by(
+        subq.c.company_id, subq.c.series_name, subq.c.rn,
+    )
+    rows = await db.execute(query)
 
-        result[company.ticker] = fundamentals
+    for row in rows.all():
+        ticker = ticker_map.get(row.company_id)
+        if ticker:
+            result[ticker].setdefault(row.series_name, []).append(float(row.value))
 
     return result
 
@@ -169,14 +185,47 @@ def _compute_fundamental_subscores(
 async def _load_equity_prices(
     db: AsyncSession,
     companies: list[Company],
+    tail: int = 0,
 ) -> dict[str, list[dict]]:
-    """Load daily close prices from CompanySeries.
+    """Load daily close prices from CompanyPriceHistory (JSONB).
 
+    When tail > 0, only the last `tail` entries are returned (for scoring).
+    When tail == 0, the full history is returned (for charting).
+
+    Falls back to CompanySeries/CompanySeriesPoint for legacy data.
     Returns {ticker: [{"date": ..., "close": ...}]}.
     """
     result: dict[str, list[dict]] = {}
+    company_ids = [c.id for c in companies]
+    ticker_map = {c.id: c.ticker for c in companies}
 
-    for company in companies:
+    # Batch-load price histories
+    if company_ids:
+        rows = await db.execute(
+            select(
+                CompanyPriceHistory.company_id,
+                CompanyPriceHistory.prices,
+            ).where(
+                CompanyPriceHistory.company_id.in_(company_ids)
+            )
+        )
+        for row in rows.all():
+            ticker = ticker_map.get(row[0])
+            if not ticker:
+                continue
+            raw_prices = row[1] or []
+            if tail > 0 and len(raw_prices) > tail:
+                raw_prices = raw_prices[-tail:]
+            prices = []
+            for p in raw_prices:
+                price_val = p.get("price") or p.get("close")
+                if price_val is not None:
+                    prices.append({"date": p["date"], "close": float(price_val)})
+            result[ticker] = prices
+
+    # Fill in any companies without JSONB data from legacy series
+    missing = [c for c in companies if c.ticker not in result]
+    for company in missing:
         query = (
             select(CompanySeriesPoint.date, CompanySeriesPoint.value)
             .join(CompanySeries)
@@ -193,18 +242,52 @@ async def _load_equity_prices(
     return result
 
 
-async def _load_point_ids_for_company(
+async def _load_point_ids_batch(
     db: AsyncSession,
-    company: Company,
-) -> list[str]:
-    """Collect all series point IDs for evidence lineage."""
-    query = (
-        select(CompanySeriesPoint.id)
+    companies: list[Company],
+) -> dict[str, list[str]]:
+    """Batch-load series point IDs used in scoring for evidence lineage.
+
+    Only loads the 2 most recent points per fundamental series (matching what
+    _load_latest_fundamentals actually uses), not every historical point.
+
+    Returns {ticker: [point_id_str, ...]}.
+    """
+    if not companies:
+        return {}
+
+    company_ids = [c.id for c in companies]
+    ticker_map = {c.id: c.ticker for c in companies}
+    result: dict[str, list[str]] = defaultdict(list)
+
+    # Use same window function to get only the 2 most recent per series
+    rn = func.row_number().over(
+        partition_by=[CompanySeries.company_id, CompanySeries.series_name],
+        order_by=CompanySeriesPoint.date.desc(),
+    ).label("rn")
+
+    subq = (
+        select(
+            CompanySeries.company_id,
+            CompanySeriesPoint.id.label("point_id"),
+            rn,
+        )
         .join(CompanySeries)
-        .where(CompanySeries.company_id == company.id)
+        .where(
+            CompanySeries.company_id.in_(company_ids),
+            CompanySeries.source.in_(["sec_edgar", "yfinance", "fmp"]),
+        )
+        .subquery()
     )
+
+    query = select(subq.c.company_id, subq.c.point_id).where(subq.c.rn <= 2)
     rows = await db.execute(query)
-    return [str(r[0]) for r in rows.all()]
+    for row in rows.all():
+        ticker = ticker_map.get(row[0])
+        if ticker:
+            result[ticker].append(str(row[1]))
+
+    return dict(result)
 
 
 async def compute_company_scores(
@@ -216,10 +299,11 @@ async def compute_company_scores(
     """Compute scores for the given companies using absolute scoring."""
     log_fn(f"Computing scores for {len(companies)} companies...")
 
-    # Load data
+    # Load data (all batch queries)
     fundamentals = await _load_latest_fundamentals(db, companies)
     derived_ratios = _compute_derived_ratios(fundamentals)
-    prices_data = await _load_equity_prices(db, companies)
+    prices_data = await _load_equity_prices(db, companies, tail=400)
+    all_point_ids = await _load_point_ids_batch(db, companies)
 
     # Fundamental sub-scores
     fundamental_subscores = _compute_fundamental_subscores(derived_ratios)
@@ -259,7 +343,7 @@ async def compute_company_scores(
         overall = fund * w["fundamental"] + mkt * w["market"]
         overall = round(overall, 2)
 
-        point_ids = await _load_point_ids_for_company(db, company)
+        point_ids = all_point_ids.get(t, [])
 
         component_data = {
             "fundamental_ratios": derived_ratios.get(t, {}),

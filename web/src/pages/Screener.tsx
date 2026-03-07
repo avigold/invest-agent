@@ -6,6 +6,7 @@ import { apiJson } from "@/lib/api";
 interface ScreenResultSummary {
   id: string;
   screen_name: string;
+  screen_version?: string;
   params: {
     return_threshold?: number;
     window_years?: number;
@@ -14,6 +15,9 @@ interface ScreenResultSummary {
   summary: {
     total_screened: number | null;
     matches_found: number | null;
+    total_observations?: number | null;
+    winner_count?: number | null;
+    base_rate?: number | null;
   };
   created_at: string;
   job_id: string | null;
@@ -65,6 +69,7 @@ export default function Screener() {
         body: JSON.stringify({
           command: "stock_screen",
           params: {
+            screen_version: "v2",
             return_threshold: returnThreshold / 100,
             window_years: windowYears,
             lookback_years: lookbackYears,
@@ -188,8 +193,8 @@ export default function Screener() {
             <thead>
               <tr className="border-b border-gray-800 text-left text-xs uppercase text-gray-500">
                 <th className="px-4 py-3">Screen</th>
-                <th className="px-4 py-3 text-right">Matches</th>
-                <th className="px-4 py-3 text-right">Screened</th>
+                <th className="px-4 py-3 text-right">Winners</th>
+                <th className="px-4 py-3 text-right">Observations</th>
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -209,10 +214,19 @@ export default function Screener() {
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-right font-mono text-white">
-                    {r.summary.matches_found ?? "\u2014"}
+                    {r.screen_version === "screen_v2"
+                      ? (r.summary.winner_count ?? "\u2014")
+                      : (r.summary.matches_found ?? "\u2014")}
+                    {r.screen_version === "screen_v2" && r.summary.base_rate != null && (
+                      <span className="ml-1 text-xs text-gray-500">
+                        ({(r.summary.base_rate * 100).toFixed(1)}%)
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right font-mono text-gray-400">
-                    {r.summary.total_screened ?? "\u2014"}
+                    {r.screen_version === "screen_v2"
+                      ? (r.summary.total_observations ?? "\u2014")
+                      : (r.summary.total_screened ?? "\u2014")}
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500">{fmtDate(r.created_at)}</td>
                   <td className="px-4 py-3 text-right">

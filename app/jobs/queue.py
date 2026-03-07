@@ -20,6 +20,8 @@ HEAVY_COMMANDS = {
     "country_refresh", "industry_refresh", "company_refresh",
     "universe_refresh", "backfill", "data_sync",
     "add_companies_by_market_cap", "stock_screen",
+    "fmp_sync", "price_sync", "score_sync", "macro_sync",
+    "discover_companies",
 }
 
 

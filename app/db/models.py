@@ -10,9 +10,11 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -274,6 +276,26 @@ class Company(Base):
     series: Mapped[list[CompanySeries]] = relationship(back_populates="company")
     scores: Mapped[list[CompanyScore]] = relationship(back_populates="company")
     risks: Mapped[list[CompanyRiskRegister]] = relationship(back_populates="company")
+    price_history: Mapped[CompanyPriceHistory | None] = relationship(back_populates="company", uselist=False)
+
+
+class CompanyPriceHistory(Base):
+    """Full daily price history stored as JSONB for fast bulk writes.
+
+    prices format: [{"date": "2024-01-02", "price": 185.64, "volume": 12345678}, ...]
+    Sorted oldest-first.
+    """
+    __tablename__ = "company_price_history"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("companies.id", ondelete="CASCADE"), unique=True, nullable=False)
+    prices: Mapped[dict] = mapped_column(JSONB, nullable=False, default=list)
+    first_date: Mapped[date_type | None] = mapped_column(Date)
+    last_date: Mapped[date_type | None] = mapped_column(Date)
+    num_points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    company: Mapped[Company] = relationship(back_populates="price_history")
 
 
 class CompanySeries(Base):
@@ -418,6 +440,57 @@ class ScreenResult(Base):
     summary: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     matches: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     artefact_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    analysis: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
 
+    user: Mapped[User] = relationship()
+
+
+class PredictionModel(Base):
+    __tablename__ = "prediction_models"
+    __table_args__ = (
+        Index("ix_prediction_models_user_id", "user_id"),
+        Index("ix_prediction_models_created_at", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    job_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
+    model_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    fold_metrics: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    aggregate_metrics: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    feature_importance: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    backtest_results: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    model_blob: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    platt_a: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    platt_b: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    user: Mapped[User] = relationship()
+    scores: Mapped[list["PredictionScore"]] = relationship(back_populates="model", cascade="all, delete-orphan")
+
+
+class PredictionScore(Base):
+    __tablename__ = "prediction_scores"
+    __table_args__ = (
+        Index("ix_prediction_scores_model_id", "model_id"),
+        Index("ix_prediction_scores_user_id", "user_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    model_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("prediction_models.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    ticker: Mapped[str] = mapped_column(String(20), nullable=False)
+    company_name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    probability: Mapped[float] = mapped_column(Float, nullable=False)
+    confidence_tier: Mapped[str] = mapped_column(String(20), nullable=False)
+    kelly_fraction: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    suggested_weight: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    contributing_features: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    feature_values: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    scored_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    job_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
+
+    model: Mapped[PredictionModel] = relationship(back_populates="scores")
     user: Mapped[User] = relationship()

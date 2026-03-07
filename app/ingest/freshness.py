@@ -13,6 +13,7 @@ FRESHNESS_HOURS: dict[str, int] = {
     "gdelt": 168,                   # 7 days (monthly aggregation)
     "sec_edgar": 720,               # 30 days (annual filings)
     "yfinance_fundamentals": 720,   # 30 days (annual filings)
+    "fmp_fundamentals": 720,         # 30 days (annual filings)
 }
 
 

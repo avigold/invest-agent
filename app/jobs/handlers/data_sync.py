@@ -22,6 +22,7 @@ from app.ingest.fred import ingest_fred_for_country
 from app.ingest.marketdata import ingest_market_data_for_country
 from app.ingest.imf import ingest_imf_for_country
 from app.ingest.gdelt import ingest_gdelt_stability
+from app.ingest.fmp_fundamentals import ingest_fmp_fundamentals_for_company
 from app.ingest.sec_edgar import ingest_edgar_for_company
 from app.ingest.company_marketdata import ingest_market_data_for_company
 from app.ingest.yfinance_fundamentals import ingest_yfinance_fundamentals_for_company
@@ -179,21 +180,31 @@ async def data_sync_handler(
         for idx, company in enumerate(companies, 1):
             _log(job, f"\n--- Company {idx}/{len(companies)}: {company.name} ({company.ticker}) ---")
 
-            # Route fundamentals by country
-            if company.country_iso2 == "US":
-                await ingest_edgar_for_company(
+            # Route fundamentals: FMP first, fallback to EDGAR (US) or yfinance (intl)
+            fmp_ids: list = []
+            if settings.fmp_api_key:
+                fmp_ids = await ingest_fmp_fundamentals_for_company(
                     db=db, artefact_store=artefact_store,
-                    edgar_source=sources["sec_edgar"], company=company,
-                    concept_map=concept_map,
+                    fmp_source=sources["fmp"], company=company,
+                    api_key=settings.fmp_api_key,
                     log_fn=lambda msg, j=job: _log(j, msg), force=force,
                 )
-            else:
-                await ingest_yfinance_fundamentals_for_company(
-                    db=db, artefact_store=artefact_store,
-                    yf_source=sources["yfinance"], company=company,
-                    column_map=yf_column_map,
-                    log_fn=lambda msg, j=job: _log(j, msg), force=force,
-                )
+
+            if not fmp_ids:
+                if company.country_iso2 == "US":
+                    await ingest_edgar_for_company(
+                        db=db, artefact_store=artefact_store,
+                        edgar_source=sources["sec_edgar"], company=company,
+                        concept_map=concept_map,
+                        log_fn=lambda msg, j=job: _log(j, msg), force=force,
+                    )
+                else:
+                    await ingest_yfinance_fundamentals_for_company(
+                        db=db, artefact_store=artefact_store,
+                        yf_source=sources["yfinance"], company=company,
+                        column_map=yf_column_map,
+                        log_fn=lambda msg, j=job: _log(j, msg), force=force,
+                    )
 
             # Market data
             await ingest_market_data_for_company(

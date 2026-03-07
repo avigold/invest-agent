@@ -48,6 +48,7 @@ _FREE_LIMITS: dict[str, int] = {
     "add_companies_by_market_cap": 3,
     "recommendation_analysis": 20,
     "stock_screen": 5,
+    "screen_analysis": 10,
 }
 
 

@@ -18,6 +18,7 @@ class JobCommand(str, Enum):
     ADD_COMPANIES_BY_MARKET_CAP = "add_companies_by_market_cap"
     RECOMMENDATION_ANALYSIS = "recommendation_analysis"
     STOCK_SCREEN = "stock_screen"
+    SCREEN_ANALYSIS = "screen_analysis"
     ECHO = "echo"  # dummy job for testing
 
 

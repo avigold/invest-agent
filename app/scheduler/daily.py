@@ -1,11 +1,16 @@
-"""Daily scheduler — automated data sync and scoring.
+"""Scheduler — automated data sync, scoring, and company discovery.
 
 Uses APScheduler to run data ingestion and scoring jobs on a schedule.
 Enabled via SCHEDULER_ENABLED=true environment variable.
 
 Schedule (UTC):
-  06:00 — data_sync (all countries + companies, freshness-aware)
-  07:00 — country_refresh + industry_refresh + company_refresh (rescore)
+  Every 4h  — price_sync (stock prices for all companies + indices)
+  06:00     — macro_sync scope=daily (FRED + country market data)
+  Sun 04:00 — fmp_sync (FMP fundamentals for all companies)
+  Sun 06:00 — score_sync (re-score stale companies)
+  1st 02:00 — discover_companies (find newly listed companies)
+  1st 03:00 — macro_sync scope=monthly (WB, IMF, FRED, GDELT, market)
+  1st 07:00 — country_refresh + industry_refresh (rescore)
 """
 from __future__ import annotations
 
@@ -50,7 +55,7 @@ def _enqueue_job(registry, job_queue, run_fn, command: str, params: dict) -> Non
 
 
 class DailyScheduler:
-    """APScheduler-based daily scheduler for automated data sync and scoring."""
+    """APScheduler-based scheduler for automated data sync and scoring."""
 
     def __init__(self, registry, job_queue, run_fn, session_factory) -> None:
         self._registry = registry
@@ -74,52 +79,144 @@ class DailyScheduler:
 
         self._scheduler = AsyncIOScheduler(timezone=tz)
 
-        # 06:00 UTC — data sync (freshness-aware ingestion only)
+        # Every 4 hours — stock prices for all companies + country indices
         self._scheduler.add_job(
-            self._run_data_sync,
+            self._run_price_sync,
             "cron",
-            hour=6,
+            hour="0,4,8,12,16,20",
             minute=0,
-            id="daily_data_sync",
+            id="price_sync",
             replace_existing=True,
         )
 
-        # 07:00 UTC — rescore everything
+        # Daily 06:00 — FRED + country market data (fast)
         self._scheduler.add_job(
-            self._run_scoring,
+            self._run_daily_macro,
             "cron",
+            hour=6,
+            minute=0,
+            id="daily_macro_sync",
+            replace_existing=True,
+        )
+
+        # Weekly Sunday 04:00 — FMP fundamentals for all companies
+        self._scheduler.add_job(
+            self._run_fmp_sync,
+            "cron",
+            day_of_week="sun",
+            hour=4,
+            minute=0,
+            id="weekly_fmp_sync",
+            replace_existing=True,
+        )
+
+        # Weekly Sunday 06:00 — re-score all stale companies
+        self._scheduler.add_job(
+            self._run_score_sync,
+            "cron",
+            day_of_week="sun",
+            hour=6,
+            minute=0,
+            id="weekly_score_sync",
+            replace_existing=True,
+        )
+
+        # Monthly 1st 02:00 — discover newly listed companies
+        self._scheduler.add_job(
+            self._run_discover_companies,
+            "cron",
+            day=1,
+            hour=2,
+            minute=0,
+            id="monthly_discover",
+            replace_existing=True,
+        )
+
+        # Monthly 1st 03:00 — slow macro data (WB, IMF, GDELT)
+        self._scheduler.add_job(
+            self._run_monthly_macro,
+            "cron",
+            day=1,
+            hour=3,
+            minute=0,
+            id="monthly_macro_sync",
+            replace_existing=True,
+        )
+
+        # Monthly 1st 07:00 — rescore countries + industries
+        self._scheduler.add_job(
+            self._run_rescore,
+            "cron",
+            day=1,
             hour=7,
             minute=0,
-            id="daily_scoring",
+            id="monthly_rescore",
             replace_existing=True,
         )
 
         self._scheduler.start()
-        logger.info("Daily scheduler started (timezone=%s)", tz)
+        logger.info("Scheduler started (timezone=%s, 7 jobs)", tz)
 
     async def stop(self) -> None:
         """Shut down the scheduler."""
         if self._scheduler is not None:
             self._scheduler.shutdown(wait=False)
-            logger.info("Daily scheduler stopped")
+            logger.info("Scheduler stopped")
 
-    async def _run_data_sync(self) -> None:
-        """Enqueue a data_sync job."""
-        # Persist the job to DB before enqueue
+    # --- Job launchers ---
+
+    async def _run_price_sync(self) -> None:
         async with self._session_factory() as db:
             await _ensure_system_user(db)
-
         _enqueue_job(
             self._registry, self._job_queue, self._run_fn,
-            "data_sync", {},
+            "price_sync", {},
         )
 
-    async def _run_scoring(self) -> None:
-        """Enqueue country, industry, and company refresh jobs (scoring only)."""
+    async def _run_daily_macro(self) -> None:
         async with self._session_factory() as db:
             await _ensure_system_user(db)
+        _enqueue_job(
+            self._registry, self._job_queue, self._run_fn,
+            "macro_sync", {"scope": "daily"},
+        )
 
-        for command in ("country_refresh", "industry_refresh", "company_refresh"):
+    async def _run_fmp_sync(self) -> None:
+        async with self._session_factory() as db:
+            await _ensure_system_user(db)
+        _enqueue_job(
+            self._registry, self._job_queue, self._run_fn,
+            "fmp_sync", {"concurrency": 10},
+        )
+
+    async def _run_score_sync(self) -> None:
+        async with self._session_factory() as db:
+            await _ensure_system_user(db)
+        _enqueue_job(
+            self._registry, self._job_queue, self._run_fn,
+            "score_sync", {},
+        )
+
+    async def _run_discover_companies(self) -> None:
+        async with self._session_factory() as db:
+            await _ensure_system_user(db)
+        _enqueue_job(
+            self._registry, self._job_queue, self._run_fn,
+            "discover_companies", {},
+        )
+
+    async def _run_monthly_macro(self) -> None:
+        async with self._session_factory() as db:
+            await _ensure_system_user(db)
+        _enqueue_job(
+            self._registry, self._job_queue, self._run_fn,
+            "macro_sync", {"scope": "monthly"},
+        )
+
+    async def _run_rescore(self) -> None:
+        async with self._session_factory() as db:
+            await _ensure_system_user(db)
+        for command in ("country_refresh", "industry_refresh"):
             _enqueue_job(
                 self._registry, self._job_queue, self._run_fn,
                 command, {},

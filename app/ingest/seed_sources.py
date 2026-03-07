@@ -13,6 +13,7 @@ _SOURCES = [
     {"name": "gdelt", "base_url": "", "requires_auth": False},
     {"name": "imf", "base_url": "https://www.imf.org/external/datamapper/api/v1/", "requires_auth": False},
     {"name": "sec_edgar", "base_url": "https://data.sec.gov/api/xbrl/", "requires_auth": False},
+    {"name": "fmp", "base_url": "https://financialmodelingprep.com/stable/", "requires_auth": True},
 ]
 
 

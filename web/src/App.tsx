@@ -19,6 +19,8 @@ const JobDetail = lazy(() => import("@/pages/JobDetail"));
 const Admin = lazy(() => import("@/pages/Admin"));
 const Screener = lazy(() => import("@/pages/Screener"));
 const ScreenerResult = lazy(() => import("@/pages/ScreenerResult"));
+const Predictions = lazy(() => import("@/pages/Predictions"));
+const PredictionDetail = lazy(() => import("@/pages/PredictionDetail"));
 
 export default function App() {
   return (
@@ -47,6 +49,8 @@ export default function App() {
                   <Route path="/jobs/:id" element={<JobDetail />} />
                   <Route path="/screener" element={<Screener />} />
                   <Route path="/screener/:id" element={<ScreenerResult />} />
+                  <Route path="/predictions" element={<Predictions />} />
+                  <Route path="/predictions/:id" element={<PredictionDetail />} />
                   <Route path="/admin" element={<Admin />} />
                 </Routes>
               </main>

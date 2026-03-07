@@ -31,10 +31,15 @@ async def list_screen_results(
         {
             "id": str(r.id),
             "screen_name": r.screen_name,
+            "screen_version": r.screen_version,
             "params": r.params,
             "summary": {
                 "total_screened": r.summary.get("total_screened"),
                 "matches_found": r.summary.get("matches_found"),
+                # v2 fields
+                "total_observations": r.summary.get("total_observations"),
+                "winner_count": r.summary.get("winner_count"),
+                "base_rate": r.summary.get("base_rate"),
             },
             "created_at": r.created_at.isoformat(),
             "job_id": str(r.job_id) if r.job_id else None,
@@ -68,6 +73,7 @@ async def get_screen_result(
         "summary": screen.summary,
         "matches": screen.matches,
         "artefact_ids": screen.artefact_ids,
+        "analysis": screen.analysis,
         "created_at": screen.created_at.isoformat(),
         "job_id": str(screen.job_id) if screen.job_id else None,
     }

@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
 
     fred_api_key: str = ""
+    fmp_api_key: str = ""
     anthropic_api_key: str = ""
     artefact_storage_dir: str = "./data/artefacts"
 

@@ -38,7 +38,7 @@ def test_is_stale_handles_naive_datetime():
 
 def test_freshness_hours_configured():
     """All expected sources should have freshness windows."""
-    expected = {"world_bank", "imf_weo", "fred", "yfinance_market", "gdelt", "sec_edgar", "yfinance_fundamentals"}
+    expected = {"world_bank", "imf_weo", "fred", "yfinance_market", "gdelt", "sec_edgar", "yfinance_fundamentals", "fmp_fundamentals"}
     assert expected == set(FRESHNESS_HOURS.keys())
 
 

@@ -75,8 +75,9 @@ def analyze_common_features(
     all_metrics: dict[str, list[float]] = {}
     for ticker, fdata in fundamentals.items():
         for metric, value in fdata.items():
-            if value is not None:
-                all_metrics.setdefault(metric, []).append(value)
+            if metric.startswith("_") or value is None or not isinstance(value, (int, float)):
+                continue
+            all_metrics.setdefault(metric, []).append(value)
 
     fundamental_stats: dict[str, dict] = {}
     for metric, values in sorted(all_metrics.items()):

@@ -17,6 +17,7 @@ from app.ingest.seed_sources import seed_data_sources
 from app.ingest.sec_edgar import ingest_edgar_for_company
 from app.ingest.company_marketdata import ingest_market_data_for_company
 from app.ingest.yfinance_fundamentals import ingest_yfinance_fundamentals_for_company
+from app.ingest.fmp_fundamentals import ingest_fmp_fundamentals_for_company
 from app.score.company import compute_company_scores, detect_company_risks
 from app.score.versions import COMPANY_CALC_VERSION
 from app.packets.company_packets import build_company_packet
@@ -141,31 +142,43 @@ async def company_refresh_handler(
         for idx, company in enumerate(companies, 1):
             _log(job, f"\n--- Company {idx}/{total}: {company.name} ({company.ticker}) ---")
 
-            # Route fundamentals by country
-            if company.country_iso2 == "US":
-                # SEC EDGAR for US companies
-                edgar_ids = await ingest_edgar_for_company(
+            # Route fundamentals: FMP first, fallback to EDGAR (US) or yfinance (intl)
+            fmp_ids: list = []
+            if settings.fmp_api_key:
+                fmp_ids = await ingest_fmp_fundamentals_for_company(
                     db=db,
                     artefact_store=artefact_store,
-                    edgar_source=sources["sec_edgar"],
+                    fmp_source=sources["fmp"],
                     company=company,
-                    concept_map=concept_map,
+                    api_key=settings.fmp_api_key,
                     log_fn=lambda msg, j=job: _log(j, msg),
                     force=force,
                 )
-                all_artefact_ids.extend(str(aid) for aid in edgar_ids)
-            else:
-                # yfinance for international companies
-                yf_ids = await ingest_yfinance_fundamentals_for_company(
-                    db=db,
-                    artefact_store=artefact_store,
-                    yf_source=sources["yfinance"],
-                    company=company,
-                    column_map=yf_column_map,
-                    log_fn=lambda msg, j=job: _log(j, msg),
-                    force=force,
-                )
-                all_artefact_ids.extend(str(aid) for aid in yf_ids)
+                all_artefact_ids.extend(str(aid) for aid in fmp_ids)
+
+            if not fmp_ids:
+                if company.country_iso2 == "US":
+                    edgar_ids = await ingest_edgar_for_company(
+                        db=db,
+                        artefact_store=artefact_store,
+                        edgar_source=sources["sec_edgar"],
+                        company=company,
+                        concept_map=concept_map,
+                        log_fn=lambda msg, j=job: _log(j, msg),
+                        force=force,
+                    )
+                    all_artefact_ids.extend(str(aid) for aid in edgar_ids)
+                else:
+                    yf_ids = await ingest_yfinance_fundamentals_for_company(
+                        db=db,
+                        artefact_store=artefact_store,
+                        yf_source=sources["yfinance"],
+                        company=company,
+                        column_map=yf_column_map,
+                        log_fn=lambda msg, j=job: _log(j, msg),
+                        force=force,
+                    )
+                    all_artefact_ids.extend(str(aid) for aid in yf_ids)
 
             # Market data for all companies
             market_ids = await ingest_market_data_for_company(
