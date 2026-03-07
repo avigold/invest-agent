@@ -14,9 +14,9 @@ from app.db.session import get_db
 router = APIRouter(prefix="/v1/predictions", tags=["predictions"])
 
 
-def _score_dict(s: PredictionScore) -> dict:
+def _score_dict(s: PredictionScore, include_feature_values: bool = False) -> dict:
     """Serialize a PredictionScore to a response dict."""
-    return {
+    d = {
         "id": str(s.id),
         "ticker": s.ticker,
         "company_name": s.company_name,
@@ -27,9 +27,11 @@ def _score_dict(s: PredictionScore) -> dict:
         "kelly_fraction": s.kelly_fraction,
         "suggested_weight": s.suggested_weight,
         "contributing_features": s.contributing_features,
-        "feature_values": s.feature_values,
         "scored_at": s.scored_at.isoformat(),
     }
+    if include_feature_values:
+        d["feature_values"] = s.feature_values
+    return d
 
 
 @router.get("/models")
@@ -129,6 +131,8 @@ async def get_model(
 @router.get("/models/{model_id}/scores")
 async def get_model_scores(
     model_id: uuid.UUID,
+    limit: int | None = None,
+    offset: int = 0,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -143,11 +147,15 @@ async def get_model_scores(
     if result.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    result = await db.execute(
+    q = (
         select(PredictionScore)
         .where(PredictionScore.model_id == model_id)
         .order_by(desc(PredictionScore.probability))
+        .offset(offset)
     )
+    if limit is not None:
+        q = q.limit(limit)
+    result = await db.execute(q)
     scores = result.scalars().all()
     return [_score_dict(s) for s in scores]
 

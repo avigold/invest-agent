@@ -17,7 +17,6 @@ interface Score {
   kelly_fraction: number;
   suggested_weight: number;
   contributing_features: Record<string, unknown>;
-  feature_values: Record<string, number>;
   scored_at: string;
 }
 
@@ -55,10 +54,12 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
 export default function MLPicks() {
   const { user, loading } = useUser();
   const navigate = useNavigate();
-  const [scores, setScores] = useState<Score[] | null>(null);
+  // First page (fast initial load when no cache)
+  const [firstPage, setFirstPage] = useState<Score[] | null>(null);
+  // Full dataset (from cache or background fetch)
+  const [allScores, setAllScores] = useState<Score[] | null>(null);
   const [model, setModel] = useState<ModelSummary | null>(null);
   const [error, setError] = useState("");
-  const [fetching, setFetching] = useState(true);
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("rank");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -76,43 +77,57 @@ export default function MLPicks() {
     const cachedScores = readCache<Score[]>("mlpicks:scores");
     const cachedModel = readCache<ModelSummary>("mlpicks:model");
     if (cachedScores && cachedModel) {
-      setScores(cachedScores);
+      setAllScores(cachedScores);
+      setFirstPage(cachedScores.slice(0, PAGE_SIZE));
       setModel(cachedModel);
-      setFetching(false);
+    } else {
+      setFirstPage(null);
+      setAllScores(null);
     }
 
-    // Always fetch fresh in background
+    // Fetch model list first
     apiJson<ModelSummary[]>("/v1/predictions/models")
       .then((models) => {
         if (models.length === 0) {
           setError("No trained models found.");
-          setScores([]);
-          setFetching(false);
+          setFirstPage([]);
+          setAllScores([]);
           return;
         }
         const latest = models[0];
         setModel(latest);
         writeCache("mlpicks:model", latest);
-        return apiJson<Score[]>(`/v1/predictions/models/${latest.id}/scores`);
-      })
-      .then((s) => {
-        if (s) {
-          setScores(s);
-          writeCache("mlpicks:scores", s);
+        const base = `/v1/predictions/models/${latest.id}/scores`;
+
+        // If no cache, fetch first page fast
+        if (!cachedScores) {
+          apiJson<Score[]>(`${base}?limit=${PAGE_SIZE}`)
+            .then((rows) => setFirstPage(rows))
+            .catch(() => setFirstPage([]));
         }
+
+        // Always fetch full dataset in background
+        apiJson<Score[]>(base)
+          .then((s) => {
+            setAllScores(s);
+            writeCache("mlpicks:scores", s);
+          })
+          .catch(() => { if (!cachedScores) setAllScores([]); });
       })
       .catch((e) => {
-        if (!cachedScores) setScores([]);
+        if (!cachedScores) {
+          setFirstPage([]);
+          setAllScores([]);
+        }
         setError(e.message);
-      })
-      .finally(() => setFetching(false));
+      });
   }, [user, flushKey]);
 
   const handleFlush = useCallback(() => {
     clearCache("mlpicks:");
-    setScores(null);
+    setFirstPage(null);
+    setAllScores(null);
     setModel(null);
-    setFetching(true);
     setFlushKey((k) => k + 1);
   }, []);
 
@@ -128,12 +143,14 @@ export default function MLPicks() {
     return (cf?.sector as string) || "";
   };
 
-  const allScores = scores ?? [];
+  // Use full dataset when available, otherwise first page
+  const hasAll = allScores !== null;
+  const scores = allScores ?? firstPage ?? [];
 
   // Country breakdown
   const countryBreakdown = useMemo(() => {
     const map: Record<string, { count: number; weight: number }> = {};
-    for (const s of allScores) {
+    for (const s of scores) {
       const c = getCountry(s) || "??";
       if (!map[c]) map[c] = { count: 0, weight: 0 };
       map[c].count++;
@@ -142,11 +159,11 @@ export default function MLPicks() {
     return Object.entries(map)
       .sort((a, b) => b[1].weight - a[1].weight)
       .slice(0, 10);
-  }, [scores]);
+  }, [allScores, firstPage]);
 
   // Sorting
   const sorted = useMemo(() => {
-    const arr = allScores.map((s, i) => ({ ...s, rank: i + 1 }));
+    const arr = scores.map((s, i) => ({ ...s, rank: i + 1 }));
     if (sortKey === "rank") {
       return sortDir === "asc" ? arr : [...arr].reverse();
     }
@@ -164,7 +181,7 @@ export default function MLPicks() {
       const cmp = typeof va === "string" ? va.localeCompare(vb as string) : (va as number) - (vb as number);
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [scores, sortKey, sortDir]);
+  }, [allScores, firstPage, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -200,10 +217,10 @@ export default function MLPicks() {
     setPage(1);
   }, [search, sortKey, sortDir]);
 
-  const initialLoading = scores === null;
+  const initialLoading = firstPage === null;
 
   if (loading || !user) return null;
-  if (!initialLoading && error && allScores.length === 0) {
+  if (!initialLoading && error && scores.length === 0) {
     return (
       <div className="rounded border border-red-800 bg-red-900/30 px-4 py-2 text-sm text-red-300">
         {error}
@@ -211,8 +228,8 @@ export default function MLPicks() {
     );
   }
 
-  const withWeights = allScores.filter((s) => s.suggested_weight > 0);
-  const totalWeight = allScores.reduce((s, x) => s + x.suggested_weight, 0);
+  const withWeights = scores.filter((s) => s.suggested_weight > 0);
+  const totalWeight = scores.reduce((s, x) => s + x.suggested_weight, 0);
 
   return (
     <div>
@@ -220,11 +237,11 @@ export default function MLPicks() {
         <div>
           <h1 className="text-2xl font-bold text-white">
             ML Picks
-            {!initialLoading && allScores.length > 0 && (
+            {!initialLoading && scores.length > 0 && (
               <span className="ml-2 text-base font-normal text-gray-500">
-                {q
-                  ? `${filtered.length} of ${allScores.length}`
-                  : `${allScores.length}`}
+                {q && hasAll
+                  ? `${filtered.length} of ${scores.length}`
+                  : `${scores.length}`}
               </span>
             )}
           </h1>
@@ -234,7 +251,7 @@ export default function MLPicks() {
                 {model.model_version}
               </Link>
               {" \u00b7 "}AUC {model.aggregate_metrics.mean_auc?.toFixed(3)}
-              {" \u00b7 "}Scored {new Date(allScores[0]?.scored_at ?? model.created_at).toLocaleDateString()}
+              {" \u00b7 "}Scored {new Date(scores[0]?.scored_at ?? model.created_at).toLocaleDateString()}
             </p>
           )}
         </div>
@@ -254,7 +271,7 @@ export default function MLPicks() {
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-gray-300" />
           <span className="ml-3 text-sm text-gray-500">Loading scores...</span>
         </div>
-      ) : allScores.length === 0 ? (
+      ) : scores.length === 0 ? (
         <div className="rounded-xl border border-gray-800 bg-gray-900/80 p-8 text-center">
           <p className="text-gray-400">No scores available yet.</p>
           <p className="mt-2 text-sm text-gray-600">
@@ -267,13 +284,13 @@ export default function MLPicks() {
           <div className="mb-6 grid gap-3 grid-cols-2 sm:grid-cols-4">
             <StatCard
               label="Stocks Scored"
-              value={String(allScores.length)}
+              value={String(scores.length)}
               sub={`${withWeights.length} in portfolio`}
             />
             <StatCard
               label="Top Probability"
-              value={fmtPct(allScores[0]?.probability)}
-              sub={allScores[0]?.ticker}
+              value={fmtPct(scores[0]?.probability)}
+              sub={scores[0]?.ticker}
             />
             <StatCard
               label="Portfolio Util."
@@ -315,7 +332,7 @@ export default function MLPicks() {
                 placeholder="Search by ticker or company name..."
                 className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 pr-8 text-sm text-gray-300 placeholder-gray-500"
               />
-              {q && fetching && (
+              {q && !hasAll && (
                 <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
                   <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-600 border-t-gray-400" />
                 </div>
