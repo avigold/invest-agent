@@ -716,6 +716,12 @@ def train_walk_forward_parquet(
         "model_version": PARQUET_MODEL_VERSION,
         "holdout_metrics": holdout_metrics,
     }
+    if dataset.return_threshold is not None:
+        train_config["return_threshold"] = dataset.return_threshold
+    if dataset.max_dd_threshold is not None:
+        train_config["max_dd_threshold"] = dataset.max_dd_threshold
+    if dataset.relative_to_country:
+        train_config["relative_to_country"] = True
 
     return TrainedModel(
         booster=final_booster,

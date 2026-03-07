@@ -319,6 +319,24 @@ def train_model(
     holdout_year: Optional[int] = typer.Option(2024, help="Holdout evaluation year"),
     min_fiscal_year: int = typer.Option(2000, help="Earliest fiscal year to include"),
     num_leaves: int = typer.Option(63, help="LightGBM num_leaves"),
+    min_dollar_volume: Optional[float] = typer.Option(
+        None, help="Min 30-day avg dollar volume (e.g. 500000 for $500k/day)",
+    ),
+    countries: Optional[str] = typer.Option(
+        None, help="Allowed country ISO2 codes, comma-separated (e.g. US,GB,DE)",
+    ),
+    max_return_clip: Optional[float] = typer.Option(
+        None, help="Clip extreme 12m returns (e.g. 10.0 for max +1000%)",
+    ),
+    return_threshold: Optional[float] = typer.Option(
+        None, help="Risk-adjusted label: min 12m return (e.g. 0.30 for +30%)",
+    ),
+    max_dd_threshold: Optional[float] = typer.Option(
+        None, help="Risk-adjusted label: min max drawdown (e.g. -0.25 for -25%)",
+    ),
+    relative_to_country: bool = typer.Option(
+        False, help="Label by excess return over country-year median",
+    ),
     skip_db_store: bool = typer.Option(False, help="Skip storing model in database"),
 ):
     """Train ML model from Parquet training data.
@@ -329,6 +347,7 @@ def train_model(
     Usage:
         python -m app.cli train-model
         python -m app.cli train-model --half-life 5.0 --holdout-year 2023
+        python -m app.cli train-model --countries US,GB,DE,FR,JP --min-dollar-volume 500000
     """
     import asyncio
     import time
@@ -349,12 +368,23 @@ def train_model(
     if fold_years:
         folds = [int(y.strip()) for y in fold_years.split(",")]
 
+    # Parse country filter
+    country_list = None
+    if countries:
+        country_list = [c.strip().upper() for c in countries.split(",")]
+
     # Load dataset
     typer.echo("Loading Parquet dataset...")
     dataset = load_parquet_dataset(
         parquet_path=parquet_path,
         min_fiscal_year=min_fiscal_year,
         half_life=half_life,
+        min_dollar_volume=min_dollar_volume,
+        allowed_countries=country_list,
+        max_return_clip=max_return_clip,
+        return_threshold=return_threshold,
+        max_dd_threshold=max_dd_threshold,
+        relative_to_country=relative_to_country,
         log_fn=typer.echo,
     )
 
@@ -397,13 +427,22 @@ async def _store_trained_model(trained) -> None:
 
     from sqlalchemy import select
 
-    from app.db.models import PredictionModel
+    from app.db.models import PredictionModel, User
     from app.db.session import _get_session_factory, dispose_engine
 
     sf = _get_session_factory()
     async with sf() as db:
+        # Get first user as model owner (system model)
+        result = await db.execute(select(User).limit(1))
+        user = result.scalars().first()
+        if not user:
+            typer.echo("ERROR: No users in database. Cannot store model.")
+            await dispose_engine()
+            return
+
         model_row = PredictionModel(
             id=uuid.uuid4(),
+            user_id=user.id,
             model_version=trained.train_config.get("model_version", "unknown"),
             config=trained.train_config,
             fold_metrics=[{
