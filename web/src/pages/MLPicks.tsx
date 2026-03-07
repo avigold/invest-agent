@@ -58,6 +58,8 @@ export default function MLPicks() {
   const [firstPage, setFirstPage] = useState<Score[] | null>(null);
   // Full dataset (from cache or background fetch)
   const [allScores, setAllScores] = useState<Score[] | null>(null);
+  // Known total count (from API, before full load completes)
+  const [totalCount, setTotalCount] = useState(0);
   const [model, setModel] = useState<ModelSummary | null>(null);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -79,6 +81,7 @@ export default function MLPicks() {
     if (cachedScores && cachedModel) {
       setAllScores(cachedScores);
       setFirstPage(cachedScores.slice(0, PAGE_SIZE));
+      setTotalCount(cachedScores.length);
       setModel(cachedModel);
     } else {
       setFirstPage(null);
@@ -101,16 +104,20 @@ export default function MLPicks() {
 
         // If no cache, fetch first page fast
         if (!cachedScores) {
-          apiJson<Score[]>(`${base}?limit=${PAGE_SIZE}`)
-            .then((rows) => setFirstPage(rows))
+          apiJson<{ items: Score[]; total: number }>(`${base}?limit=${PAGE_SIZE}`)
+            .then((res) => {
+              setFirstPage(res.items);
+              setTotalCount(res.total);
+            })
             .catch(() => setFirstPage([]));
         }
 
         // Always fetch full dataset in background
-        apiJson<Score[]>(base)
-          .then((s) => {
-            setAllScores(s);
-            writeCache("mlpicks:scores", s);
+        apiJson<{ items: Score[]; total: number }>(base)
+          .then((res) => {
+            setAllScores(res.items);
+            setTotalCount(res.total);
+            writeCache("mlpicks:scores", res.items);
           })
           .catch(() => { if (!cachedScores) setAllScores([]); });
       })
@@ -207,8 +214,9 @@ export default function MLPicks() {
       )
     : sorted;
 
-  // Pagination
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Pagination — use known total when full data isn't loaded yet (and not searching)
+  const paginationCount = hasAll || q ? filtered.length : totalCount;
+  const totalPages = Math.max(1, Math.ceil(paginationCount / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const visible = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
@@ -237,11 +245,11 @@ export default function MLPicks() {
         <div>
           <h1 className="text-2xl font-bold text-white">
             ML Picks
-            {!initialLoading && scores.length > 0 && (
+            {!initialLoading && (totalCount > 0 || scores.length > 0) && (
               <span className="ml-2 text-base font-normal text-gray-500">
                 {q && hasAll
-                  ? `${filtered.length} of ${scores.length}`
-                  : `${scores.length}`}
+                  ? `${filtered.length} of ${totalCount || scores.length}`
+                  : `${totalCount || scores.length}`}
               </span>
             )}
           </h1>
@@ -444,7 +452,7 @@ export default function MLPicks() {
           {totalPages > 1 && (
             <div className="mt-4 flex items-center justify-between text-sm">
               <span className="text-gray-500">
-                {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}
+                {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, paginationCount)} of {paginationCount}
               </span>
               <div className="flex items-center gap-2">
                 <button

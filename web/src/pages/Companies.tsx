@@ -140,7 +140,9 @@ export default function Companies() {
       )
     : companies;
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Use known total for pagination when full data isn't loaded yet (and not searching)
+  const paginationCount = q && hasAll ? filtered.length : hasAll ? filtered.length : totalCount;
+  const totalPages = Math.max(1, Math.ceil(paginationCount / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const visible = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
@@ -249,7 +251,7 @@ export default function Companies() {
       {!initialLoading && totalPages > 1 && (
         <div className="mt-4 flex items-center justify-between text-sm">
           <span className="text-gray-500">
-            {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}
+            {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, paginationCount)} of {paginationCount}
           </span>
           <div className="flex items-center gap-2">
             <button

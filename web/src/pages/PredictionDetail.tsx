@@ -110,8 +110,8 @@ export default function PredictionDetail() {
       apiJson<ModelDetail>(`/v1/predictions/models/${id}`)
         .then(setModel)
         .catch((e) => setError(e.message));
-      apiJson<Score[]>(`/v1/predictions/models/${id}/scores`)
-        .then(setScores)
+      apiJson<{ items: Score[]; total: number }>(`/v1/predictions/models/${id}/scores`)
+        .then((res) => setScores(res.items))
         .catch(() => {});
     }
   }, [user, id]);

@@ -137,6 +137,8 @@ async def get_model_scores(
     db: AsyncSession = Depends(get_db),
 ):
     """Get prediction scores for a model."""
+    from sqlalchemy import func
+
     # Verify model exists and belongs to user
     result = await db.execute(
         select(PredictionModel.id).where(
@@ -146,6 +148,12 @@ async def get_model_scores(
     )
     if result.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="Model not found")
+
+    # Total count
+    count_result = await db.execute(
+        select(func.count()).where(PredictionScore.model_id == model_id)
+    )
+    total = count_result.scalar() or 0
 
     q = (
         select(PredictionScore)
@@ -157,7 +165,10 @@ async def get_model_scores(
         q = q.limit(limit)
     result = await db.execute(q)
     scores = result.scalars().all()
-    return [_score_dict(s) for s in scores]
+    return {
+        "items": [_score_dict(s) for s in scores],
+        "total": total,
+    }
 
 
 @router.delete("/models/{model_id}", status_code=204)
