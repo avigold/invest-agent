@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.90.21",
     "lightweight-charts": "^5.1.0",
     "react": "^18.3",
     "react-dom": "^18.3",

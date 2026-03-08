@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import { useUser } from "@/lib/auth";
-import { apiJson } from "@/lib/api";
+import { useMLModel, useMLModelScores } from "@/lib/queries";
 
 interface ModelDetail {
   id: string;
@@ -96,31 +97,20 @@ export default function PredictionDetail() {
   const { id } = useParams<{ id: string }>();
   const { user, loading } = useUser();
   const navigate = useNavigate();
-  const [model, setModel] = useState<ModelDetail | null>(null);
-  const [scores, setScores] = useState<Score[]>([]);
-  const [error, setError] = useState("");
+  const { data: model, error } = useMLModel<ModelDetail>(id || "");
+  const { data: scoresData } = useMLModelScores<{ items: Score[]; total: number }>(id || "");
+  const scores = scoresData?.items ?? [];
   const [showAllScores, setShowAllScores] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
 
-  useEffect(() => {
-    if (user && id) {
-      apiJson<ModelDetail>(`/v1/predictions/models/${id}`)
-        .then(setModel)
-        .catch((e) => setError(e.message));
-      apiJson<{ items: Score[]; total: number }>(`/v1/predictions/models/${id}/scores`)
-        .then((res) => setScores(res.items))
-        .catch(() => {});
-    }
-  }, [user, id]);
-
   if (loading || !user) return null;
   if (error) {
     return (
       <div className="rounded border border-red-800 bg-red-900/30 px-4 py-2 text-sm text-red-300">
-        {error}
+        {(error as Error).message}
       </div>
     );
   }

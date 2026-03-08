@@ -1,50 +1,31 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
-import { readCache, writeCache, clearCache } from "@/lib/cache";
+import { useIndustries, queryKeys } from "@/lib/queries";
+import { useQueryClient } from "@tanstack/react-query";
 import IndustryTable, { IndustryRow } from "@/components/IndustryTable";
 
 export default function Industries() {
   const { user, loading } = useUser();
   const navigate = useNavigate();
-  const [industries, setIndustries] = useState<IndustryRow[] | null>(null);
+  const queryClient = useQueryClient();
   const [countryFilter, setCountryFilter] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [flushKey, setFlushKey] = useState(0);
+
+  const { data: industries, isLoading } = useIndustries<IndustryRow[]>(
+    countryFilter || undefined,
+  );
 
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
 
-  useEffect(() => {
-    if (!user) return;
-    const key = `industries:${countryFilter}`;
-
-    // Try cache first
-    const cached = readCache<IndustryRow[]>(key);
-    if (cached) {
-      setIndustries(cached);
-    } else {
-      setIndustries(null);
-    }
-
-    // Always fetch fresh in background
-    const params = countryFilter ? `?iso2=${countryFilter}` : "";
-    apiJson<IndustryRow[]>(`/v1/industries${params}`)
-      .then((rows) => {
-        setIndustries(rows);
-        writeCache(key, rows);
-      })
-      .catch(() => { if (!cached) setIndustries([]); });
-  }, [user, countryFilter, flushKey]);
-
-  const handleFlush = useCallback(() => {
-    clearCache("industries:");
-    setIndustries(null);
-    setFlushKey((k) => k + 1);
-  }, []);
+  const handleFlush = () => {
+    queryClient.invalidateQueries({ queryKey: ["industries"] });
+  };
 
   const submitRefresh = async () => {
     setSubmitting(true);
@@ -70,12 +51,10 @@ export default function Industries() {
   const countryList = industries
     ? Array.from(
         new Map(
-          industries.map((r) => [r.country_iso2, r.country_name])
-        ).entries()
+          industries.map((r) => [r.country_iso2, r.country_name]),
+        ).entries(),
       ).sort((a, b) => a[1].localeCompare(b[1]))
     : [];
-
-  const initialLoading = industries === null;
 
   if (loading || !user) return null;
 
@@ -122,13 +101,13 @@ export default function Industries() {
       )}
 
       <div className="rounded-lg border border-gray-800 bg-gray-900">
-        {initialLoading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center p-12">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-gray-300" />
             <span className="ml-3 text-sm text-gray-500">Loading industries...</span>
           </div>
         ) : (
-          <IndustryTable industries={industries} />
+          <IndustryTable industries={industries ?? []} />
         )}
       </div>
     </div>

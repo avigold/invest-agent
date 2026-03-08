@@ -1,8 +1,8 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useUser } from "@/lib/auth";
-import { apiJson } from "@/lib/api";
-import { readCache, writeCache, clearCache } from "@/lib/cache";
+import { useMLModels, useMLModelScores, queryKeys } from "@/lib/queries";
+import { useQueryClient } from "@tanstack/react-query";
 
 const PAGE_SIZE = 25;
 
@@ -56,89 +56,32 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
 export default function MLPicks() {
   const { user, loading } = useUser();
   const navigate = useNavigate();
-  // First page (fast initial load when no cache)
-  const [firstPage, setFirstPage] = useState<Score[] | null>(null);
-  // Full dataset (from cache or background fetch)
-  const [allScores, setAllScores] = useState<Score[] | null>(null);
-  // Known total count (from API, before full load completes)
-  const [totalCount, setTotalCount] = useState(0);
-  const [model, setModel] = useState<ModelSummary | null>(null);
-  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("rank");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(1);
-  const [flushKey, setFlushKey] = useState(0);
+
+  // Dependent queries: models → latest model → scores
+  const { data: models = [], error: modelsError } = useMLModels<ModelSummary[]>();
+  const latestModel = models.length > 0 ? models[0] : null;
+  const { data: scoresData } = useMLModelScores<{ items: Score[]; total: number }>(
+    latestModel?.id || "",
+  );
+
+  const scores = scoresData?.items ?? [];
+  const model = latestModel;
 
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
 
-  useEffect(() => {
-    if (!user) return;
-
-    // Try cache first
-    const cachedScores = readCache<Score[]>("mlpicks:scores");
-    const cachedModel = readCache<ModelSummary>("mlpicks:model");
-    if (cachedScores && cachedModel) {
-      setAllScores(cachedScores);
-      setFirstPage(cachedScores.slice(0, PAGE_SIZE));
-      setTotalCount(cachedScores.length);
-      setModel(cachedModel);
-    } else {
-      setFirstPage(null);
-      setAllScores(null);
+  const handleFlush = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.mlModels() });
+    if (latestModel) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mlModelScores(latestModel.id) });
     }
-
-    // Fetch model list first
-    apiJson<ModelSummary[]>("/v1/predictions/models")
-      .then((models) => {
-        if (models.length === 0) {
-          setError("No trained models found.");
-          setFirstPage([]);
-          setAllScores([]);
-          return;
-        }
-        const latest = models[0];
-        setModel(latest);
-        writeCache("mlpicks:model", latest);
-        const base = `/v1/predictions/models/${latest.id}/scores`;
-
-        // If no cache, fetch first page fast
-        if (!cachedScores) {
-          apiJson<{ items: Score[]; total: number }>(`${base}?limit=${PAGE_SIZE}`)
-            .then((res) => {
-              setFirstPage(res.items);
-              setTotalCount(res.total);
-            })
-            .catch(() => setFirstPage([]));
-        }
-
-        // Always fetch full dataset in background
-        apiJson<{ items: Score[]; total: number }>(base)
-          .then((res) => {
-            setAllScores(res.items);
-            setTotalCount(res.total);
-            writeCache("mlpicks:scores", res.items);
-          })
-          .catch(() => { if (!cachedScores) setAllScores([]); });
-      })
-      .catch((e) => {
-        if (!cachedScores) {
-          setFirstPage([]);
-          setAllScores([]);
-        }
-        setError(e.message);
-      });
-  }, [user, flushKey]);
-
-  const handleFlush = useCallback(() => {
-    clearCache("mlpicks:");
-    setFirstPage(null);
-    setAllScores(null);
-    setModel(null);
-    setFlushKey((k) => k + 1);
-  }, []);
+  };
 
   const getCountry = (s: Score): string => {
     if (s.country) return s.country;
@@ -152,9 +95,7 @@ export default function MLPicks() {
     return (cf?.sector as string) || "";
   };
 
-  // Use full dataset when available, otherwise first page
-  const hasAll = allScores !== null;
-  const scores = allScores ?? firstPage ?? [];
+  const hasAll = scores.length > 0;
 
   // Country breakdown
   const countryBreakdown = useMemo(() => {
@@ -168,7 +109,7 @@ export default function MLPicks() {
     return Object.entries(map)
       .sort((a, b) => b[1].weight - a[1].weight)
       .slice(0, 10);
-  }, [allScores, firstPage]);
+  }, [scores]);
 
   // Sorting
   const sorted = useMemo(() => {
@@ -188,7 +129,7 @@ export default function MLPicks() {
       const cmp = typeof va === "string" ? va.localeCompare(vb as string) : (va as number) - (vb as number);
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [allScores, firstPage, sortKey, sortDir]);
+  }, [scores, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -214,9 +155,8 @@ export default function MLPicks() {
       )
     : sorted;
 
-  // Pagination — use known total when full data isn't loaded yet (and not searching)
-  const paginationCount = hasAll || q ? filtered.length : totalCount;
-  const totalPages = Math.max(1, Math.ceil(paginationCount / PAGE_SIZE));
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const visible = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
@@ -225,13 +165,13 @@ export default function MLPicks() {
     setPage(1);
   }, [search, sortKey, sortDir]);
 
-  const initialLoading = firstPage === null;
+  const initialLoading = models.length === 0 && !modelsError;
 
   if (loading || !user) return null;
-  if (!initialLoading && error && scores.length === 0) {
+  if (!initialLoading && modelsError && scores.length === 0) {
     return (
       <div className="rounded border border-red-800 bg-red-900/30 px-4 py-2 text-sm text-red-300">
-        {error}
+        {(modelsError as Error).message}
       </div>
     );
   }
@@ -244,11 +184,11 @@ export default function MLPicks() {
         <div>
           <h1 className="text-2xl font-bold text-white">
             ML Picks
-            {!initialLoading && (totalCount > 0 || scores.length > 0) && (
+            {hasAll && (
               <span className="ml-2 text-base font-normal text-gray-500">
-                {q && hasAll
-                  ? `${filtered.length} of ${totalCount || scores.length}`
-                  : `${totalCount || scores.length}`}
+                {q
+                  ? `${filtered.length} of ${scores.length}`
+                  : `${scores.length}`}
               </span>
             )}
           </h1>
@@ -356,11 +296,6 @@ export default function MLPicks() {
                 placeholder="Name | Symbol"
                 className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 pr-8 text-sm text-gray-300 placeholder-gray-500"
               />
-              {q && !hasAll && (
-                <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
-                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-600 border-t-gray-400" />
-                </div>
-              )}
             </div>
           </div>
 
@@ -465,7 +400,7 @@ export default function MLPicks() {
           {totalPages > 1 && (
             <div className="mt-4 flex items-center justify-between text-sm">
               <span className="text-gray-500">
-                {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, paginationCount)} of {paginationCount}
+                {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}
               </span>
               <div className="flex items-center gap-2">
                 <button

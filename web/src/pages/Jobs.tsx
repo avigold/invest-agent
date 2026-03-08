@@ -1,39 +1,23 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
+import { useJobs, queryKeys } from "@/lib/queries";
+import { useQueryClient } from "@tanstack/react-query";
 import JobsTable, { JobRow } from "@/components/JobsTable";
 
 export default function Jobs() {
   const { user, loading } = useUser();
   const navigate = useNavigate();
-  const [jobs, setJobs] = useState<JobRow[]>([]);
+  const queryClient = useQueryClient();
+  const { data: jobs = [] } = useJobs<JobRow[]>();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
-
-  const loadJobs = () => {
-    apiJson<JobRow[]>("/api/jobs")
-      .then(setJobs)
-      .catch(() => {});
-  };
-
-  useEffect(() => {
-    if (user) loadJobs();
-  }, [user]);
-
-  // Poll for updates when there are running/queued jobs
-  useEffect(() => {
-    const hasActive = jobs.some(
-      (j) => j.status === "running" || j.status === "queued"
-    );
-    if (!hasActive) return;
-    const id = setInterval(loadJobs, 3000);
-    return () => clearInterval(id);
-  }, [jobs]);
 
   const submitEchoJob = async () => {
     setSubmitting(true);
@@ -47,12 +31,16 @@ export default function Jobs() {
           params: { message: "Hello from Invest Agent" },
         }),
       });
-      loadJobs();
+      queryClient.invalidateQueries({ queryKey: queryKeys.jobs() });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to submit job");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const refreshJobs = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobs() });
   };
 
   if (loading || !user) return null;
@@ -77,7 +65,7 @@ export default function Jobs() {
       )}
 
       <div className="rounded-lg border border-gray-800 bg-gray-900">
-        <JobsTable jobs={jobs} onRefresh={loadJobs} />
+        <JobsTable jobs={jobs} onRefresh={refreshJobs} />
       </div>
     </div>
   );

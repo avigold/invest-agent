@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
+import { useJobDetail, queryKeys } from "@/lib/queries";
+import { useQueryClient } from "@tanstack/react-query";
 import StatusBadge from "@/components/StatusBadge";
 import LogViewer from "@/components/LogViewer";
 
@@ -17,39 +19,22 @@ interface JobDetailData {
   queue_position: number | null;
 }
 
-export default function JobDetail() {
+export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user, loading } = useUser();
   const navigate = useNavigate();
-  const [job, setJob] = useState<JobDetailData | null>(null);
-  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
+  const { data: job, error } = useJobDetail<JobDetailData>(id || "");
 
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
 
-  useEffect(() => {
-    if (!user || !id) return;
-    apiJson<JobDetailData>(`/api/jobs/${id}`)
-      .then(setJob)
-      .catch(() => setError("Job not found"));
-  }, [user, id]);
-
-  // Poll for status updates
-  useEffect(() => {
-    if (!job || !["running", "queued"].includes(job.status)) return;
-    const interval = setInterval(() => {
-      apiJson<JobDetailData>(`/api/jobs/${id}`)
-        .then(setJob)
-        .catch(() => {});
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [job, id]);
-
   const handleCancel = async () => {
     try {
       await apiJson(`/api/jobs/${id}/cancel`, { method: "POST" });
-      apiJson<JobDetailData>(`/api/jobs/${id}`).then(setJob);
+      queryClient.invalidateQueries({ queryKey: queryKeys.job(id || "") });
+      queryClient.invalidateQueries({ queryKey: queryKeys.jobs() });
     } catch {
       // ignore
     }
@@ -58,6 +43,7 @@ export default function JobDetail() {
   const handleDelete = async () => {
     try {
       await apiJson(`/api/jobs/${id}`, { method: "DELETE" });
+      queryClient.invalidateQueries({ queryKey: queryKeys.jobs() });
       navigate("/jobs");
     } catch {
       // ignore
@@ -69,7 +55,7 @@ export default function JobDetail() {
   if (error) {
     return (
       <div className="text-center">
-        <p className="text-red-400">{error}</p>
+        <p className="text-red-400">{(error as Error).message}</p>
         <Link to="/jobs" className="text-brand hover:underline">
           Back to jobs
         </Link>

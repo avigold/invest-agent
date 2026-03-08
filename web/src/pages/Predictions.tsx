@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
+import { useMLModels } from "@/lib/queries";
 
 interface ModelSummary {
   id: string;
@@ -47,7 +49,7 @@ function fmtPct(v: number | undefined): string {
 export default function Predictions() {
   const { user, loading } = useUser();
   const navigate = useNavigate();
-  const [models, setModels] = useState<ModelSummary[]>([]);
+  const { data: models = [] } = useMLModels<ModelSummary[]>();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -60,14 +62,6 @@ export default function Predictions() {
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
-
-  useEffect(() => {
-    if (user) {
-      apiJson<ModelSummary[]>("/v1/predictions/models")
-        .then(setModels)
-        .catch(() => {});
-    }
-  }, [user]);
 
   const trainModel = async () => {
     setSubmitting(true);

@@ -1,7 +1,9 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
+import { useRecommendationDetail, queryKeys } from "@/lib/queries";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface ScoreEntry {
   score: number;
@@ -110,28 +112,17 @@ const ANALYSIS_SECTIONS: { key: keyof Analysis; label: string }[] = [
 export default function RecommendationDetail() {
   const { user, loading } = useUser();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { ticker: rawTicker } = useParams<{ ticker: string }>();
   const ticker = rawTicker?.toUpperCase() || "";
-  const [data, setData] = useState<RecommendationDetailData | null>(null);
-  const [error, setError] = useState("");
+  const { data, error: queryError } = useRecommendationDetail<RecommendationDetailData>(ticker);
+  const error = queryError ? (queryError instanceof Error ? queryError.message : "Failed to load") : "";
   const [jobStatus, setJobStatus] = useState<"idle" | "running" | "done" | "failed">("idle");
   const [jobError, setJobError] = useState("");
 
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
-
-  const fetchData = useCallback(() => {
-    if (user && ticker) {
-      apiJson<RecommendationDetailData>(`/v1/recommendation/${ticker}`)
-        .then(setData)
-        .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
-    }
-  }, [user, ticker]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
 
   const generateAnalysis = async () => {
     setJobStatus("running");
@@ -153,8 +144,7 @@ export default function RecommendationDetail() {
           if (status.status === "done") {
             clearInterval(pollInterval);
             setJobStatus("done");
-            // Refresh recommendation data to pick up cached analysis
-            fetchData();
+            queryClient.invalidateQueries({ queryKey: queryKeys.recommendation(ticker) });
           } else if (status.status === "failed" || status.status === "cancelled") {
             clearInterval(pollInterval);
             setJobStatus("failed");
@@ -350,7 +340,7 @@ export default function RecommendationDetail() {
                 )}
                 <button
                   onClick={generateAnalysis}
-                  disabled={jobStatus === "running"}
+                  disabled={jobStatus !== "idle" && jobStatus !== "done" && jobStatus !== "failed"}
                   className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand/80 disabled:opacity-50 transition-colors"
                 >
                   Generate Analysis

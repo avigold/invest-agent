@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
+import { useEffect } from "react";
 import { useUser } from "@/lib/auth";
-import { apiJson } from "@/lib/api";
+import { useMLStockDetail } from "@/lib/queries";
 import ScoreCard from "@/components/ScoreCard";
 import StockChart from "@/components/StockChart";
 
@@ -212,20 +213,11 @@ export default function MLStockDetail() {
   const navigate = useNavigate();
   const { ticker: rawTicker } = useParams<{ ticker: string }>();
   const ticker = rawTicker?.toUpperCase() || "";
-  const [data, setData] = useState<MLScoreDetail | null>(null);
-  const [error, setError] = useState("");
+  const { data, error, isLoading } = useMLStockDetail<MLScoreDetail>(ticker);
 
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
-
-  useEffect(() => {
-    if (user && ticker) {
-      apiJson<MLScoreDetail>(`/v1/predictions/score/${ticker.replace(/\./g, "-")}`)
-        .then(setData)
-        .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
-    }
-  }, [user, ticker]);
 
   if (loading || !user) return null;
 
@@ -236,13 +228,13 @@ export default function MLStockDetail() {
           &larr; Back to ML Picks
         </Link>
         <div className="rounded border border-red-800 bg-red-900/30 px-4 py-3 text-red-300">
-          {error}
+          {(error as Error).message}
         </div>
       </div>
     );
   }
 
-  if (!data) {
+  if (isLoading || !data) {
     return (
       <div>
         <Link to="/ml/picks" className="mb-4 inline-block text-sm text-gray-400 hover:text-white">

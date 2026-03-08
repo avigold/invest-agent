@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
+import { useScreenerResults } from "@/lib/queries";
 
 interface ScreenResultSummary {
   id: string;
@@ -37,7 +39,7 @@ function fmtDate(iso: string): string {
 export default function Screener() {
   const { user, loading } = useUser();
   const navigate = useNavigate();
-  const [results, setResults] = useState<ScreenResultSummary[]>([]);
+  const { data: results = [] } = useScreenerResults<ScreenResultSummary[]>();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -50,14 +52,6 @@ export default function Screener() {
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
-
-  useEffect(() => {
-    if (user) {
-      apiJson<ScreenResultSummary[]>("/v1/screener/results")
-        .then(setResults)
-        .catch(() => {});
-    }
-  }, [user]);
 
   const runScreen = async () => {
     setSubmitting(true);

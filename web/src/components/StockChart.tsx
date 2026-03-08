@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createChart,
   AreaSeries,
@@ -7,7 +7,7 @@ import {
   type ISeriesApi,
   type MouseEventParams,
 } from "lightweight-charts";
-import { apiJson } from "@/lib/api";
+import { useChartData } from "@/lib/queries";
 import PriceHeader, { type LatestPrice } from "./PriceHeader";
 import type { MarketStatusData } from "./MarketStatus";
 
@@ -32,8 +32,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Area"> | null>(null);
   const [period, setPeriod] = useState("1y");
-  const [data, setData] = useState<ChartResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading: loading } = useChartData<ChartResponse>(ticker, period);
   const [crosshairPrice, setCrosshairPrice] = useState<{
     date: string;
     value: number;
@@ -146,35 +145,15 @@ export default function StockChart({ ticker }: { ticker: string }) {
     };
   }, []);
 
-  // Fetch data
-  const fetchData = useCallback(async () => {
-    try {
-      const res = await apiJson<ChartResponse>(
-        `/v1/company/${ticker.replace(/\./g, "-")}/chart?period=${period}`
+  // Sync query data to chart
+  useEffect(() => {
+    if (data && seriesRef.current && data.points.length > 0) {
+      seriesRef.current.setData(
+        data.points.map((p) => ({ time: p.date, value: p.value }))
       );
-      setData(res);
-      if (seriesRef.current && res.points.length > 0) {
-        seriesRef.current.setData(
-          res.points.map((p) => ({ time: p.date, value: p.value }))
-        );
-        chartRef.current?.timeScale().fitContent();
-      }
-    } catch {
-      // Chart data is non-critical — fail silently
+      chartRef.current?.timeScale().fitContent();
     }
-  }, [ticker, period]);
-
-  useEffect(() => {
-    setLoading(true);
-    fetchData().finally(() => setLoading(false));
-  }, [fetchData]);
-
-  // Polling when market is open
-  useEffect(() => {
-    if (!data?.market_status?.is_open) return;
-    const interval = setInterval(fetchData, 60_000);
-    return () => clearInterval(interval);
-  }, [data?.market_status?.is_open, fetchData]);
+  }, [data]);
 
   return (
     <div className="rounded-xl border border-gray-800 bg-gray-900 p-5 mb-8">

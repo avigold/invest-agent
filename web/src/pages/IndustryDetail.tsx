@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom";
+import { useEffect } from "react";
 import { useUser } from "@/lib/auth";
-import { apiJson } from "@/lib/api";
+import { useIndustryDetail } from "@/lib/queries";
 import ScoreCard from "@/components/ScoreCard";
 
 interface Signal {
@@ -74,36 +74,23 @@ export default function IndustryDetail() {
   const { gics_code } = useParams<{ gics_code: string }>();
   const [searchParams] = useSearchParams();
   const iso2 = searchParams.get("iso2") || "US";
-  const [summary, setSummary] = useState<IndustrySummary | null>(null);
-  const [error, setError] = useState("");
+  const { data: summary, error, isLoading } = useIndustryDetail<IndustrySummary>(gics_code || "", iso2);
 
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
-
-  useEffect(() => {
-    if (user && gics_code) {
-      apiJson<IndustrySummary>(
-        `/v1/industry/${gics_code}/summary?iso2=${iso2}`
-      )
-        .then(setSummary)
-        .catch((e) =>
-          setError(e instanceof Error ? e.message : "Failed to load")
-        );
-    }
-  }, [user, gics_code, iso2]);
 
   if (loading || !user) return null;
 
   if (error) {
     return (
       <div className="rounded border border-red-800 bg-red-900/30 px-4 py-3 text-red-300">
-        {error}
+        {(error as Error).message}
       </div>
     );
   }
 
-  if (!summary) {
+  if (isLoading || !summary) {
     return <p className="text-gray-500">Loading...</p>;
   }
 

@@ -1,7 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useUser } from "@/lib/auth";
-import { apiJson } from "@/lib/api";
+import {
+  useDashboardJobs,
+  useDashboardCountries,
+  useDashboardCompanies,
+  useDashboardIndustries,
+  useMLLatestScores,
+} from "@/lib/queries";
 import JobsTable, { JobRow } from "@/components/JobsTable";
 
 interface CountryPreview {
@@ -63,44 +69,24 @@ const TIER_COLORS: Record<string, string> = {
 export default function Dashboard() {
   const { user, loading } = useUser();
   const navigate = useNavigate();
-  const [recentJobs, setRecentJobs] = useState<JobRow[]>([]);
-  const [topCountries, setTopCountries] = useState<CountryPreview[]>([]);
-  const [topCompanies, setTopCompanies] = useState<CompanyPreview[]>([]);
-  const [topIndustries, setTopIndustries] = useState<IndustryPreview[]>([]);
-  const [mlScores, setMlScores] = useState<MLScore[]>([]);
-  const [mlModel, setMlModel] = useState<{ version: string; auc?: number } | null>(null);
+  const { data: allJobs = [] } = useDashboardJobs<JobRow[]>();
+  const { data: allCountries = [] } = useDashboardCountries<CountryPreview[]>();
+  const { data: topCompanies = [] } = useDashboardCompanies<CompanyPreview[]>();
+  const { data: topIndustries = [] } = useDashboardIndustries<IndustryPreview[]>();
+  const { data: latestScoresData } = useMLLatestScores<LatestScores>();
+
+  const recentJobs = allJobs.slice(0, 5);
+  const topCountries = allCountries.slice(0, 3);
+  const mlScores = latestScoresData?.scores ?? [];
+  const mlModel = latestScoresData
+    ? { version: latestScoresData.model_version, auc: latestScoresData.aggregate_metrics?.mean_auc }
+    : null;
 
   useEffect(() => {
     if (!loading && !user) {
       navigate("/login", { replace: true });
     }
   }, [user, loading, navigate]);
-
-  useEffect(() => {
-    if (user) {
-      apiJson<JobRow[]>("/api/jobs")
-        .then((jobs) => setRecentJobs(jobs.slice(0, 5)))
-        .catch(() => {});
-      apiJson<CountryPreview[]>("/v1/countries")
-        .then((c) => setTopCountries(c.slice(0, 3)))
-        .catch(() => {});
-      apiJson<CompanyPreview[]>("/v1/companies?limit=5")
-        .then((c) => setTopCompanies(c))
-        .catch(() => {});
-      apiJson<IndustryPreview[]>("/v1/industries?limit=5")
-        .then((ind) => setTopIndustries(ind))
-        .catch(() => {});
-      apiJson<LatestScores>("/v1/predictions/models/latest/scores?limit=5")
-        .then((data) => {
-          setMlScores(data.scores);
-          setMlModel({
-            version: data.model_version,
-            auc: data.aggregate_metrics?.mean_auc,
-          });
-        })
-        .catch(() => {});
-    }
-  }, [user]);
 
   if (loading || !user) return null;
 

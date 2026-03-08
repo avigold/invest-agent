@@ -1,7 +1,9 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
+import { useScreenerResultDetail, queryKeys } from "@/lib/queries";
+import { useQueryClient } from "@tanstack/react-query";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -240,26 +242,15 @@ export default function ScreenerResult() {
   const { id } = useParams<{ id: string }>();
   const { user, loading } = useUser();
   const navigate = useNavigate();
-  const [result, setResult] = useState<ScreenResultFull | null>(null);
-  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
+  const { data: result, error: queryError } = useScreenerResultDetail<ScreenResultFull>(id || "");
+  const error = queryError ? (queryError instanceof Error ? queryError.message : "Failed to load") : "";
   const [jobStatus, setJobStatus] = useState<"idle" | "running" | "done" | "failed">("idle");
   const [jobError, setJobError] = useState("");
 
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
-
-  const fetchData = useCallback(() => {
-    if (user && id) {
-      apiJson<ScreenResultFull>(`/v1/screener/results/${id}`)
-        .then(setResult)
-        .catch((e) => setError(e.message));
-    }
-  }, [user, id]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
 
   const analyzePatterns = async () => {
     setJobStatus("running");
@@ -280,7 +271,7 @@ export default function ScreenerResult() {
           if (status.status === "done") {
             clearInterval(pollInterval);
             setJobStatus("done");
-            fetchData();
+            queryClient.invalidateQueries({ queryKey: queryKeys.screenerResult(id || "") });
           } else if (status.status === "failed" || status.status === "cancelled") {
             clearInterval(pollInterval);
             setJobStatus("failed");

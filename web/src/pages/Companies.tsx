@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
-import { readCache, writeCache, clearCache } from "@/lib/cache";
+import { useCompanies, queryKeys } from "@/lib/queries";
+import { useQueryClient } from "@tanstack/react-query";
 import CompanyTable, { CompanyRow } from "@/components/CompanyTable";
 
 const PAGE_SIZE = 25;
@@ -37,69 +38,27 @@ const COUNTRIES: { code: string; name: string }[] = [
 export default function Companies() {
   const { user, loading } = useUser();
   const navigate = useNavigate();
-  // First page (fast initial load when no cache)
-  const [firstPage, setFirstPage] = useState<CompanyRow[] | null>(null);
-  // Full dataset (from cache or background fetch)
-  const [allCompanies, setAllCompanies] = useState<CompanyRow[] | null>(null);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [sectorFilter, setSectorFilter] = useState("");
   const [countryFilter, setCountryFilter] = useState("");
   const [page, setPage] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const fetchId = useRef(0);
-  const [flushKey, setFlushKey] = useState(0);
+
+  const filters = {
+    gics_code: sectorFilter || undefined,
+    country_iso2: countryFilter || undefined,
+  };
+  const { data: companies = [], isLoading } = useCompanies<CompanyRow[]>(filters);
 
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
 
-  useEffect(() => {
-    if (!user) return;
-    const id = ++fetchId.current;
-    const key = `companies:${sectorFilter}:${countryFilter}`;
-
-    // Try cache first
-    const cached = readCache<CompanyRow[]>(key);
-    if (cached) {
-      setAllCompanies(cached);
-      setFirstPage(cached.slice(0, PAGE_SIZE));
-    } else {
-      setFirstPage(null);
-      setAllCompanies(null);
-    }
-
-    const params = new URLSearchParams();
-    if (sectorFilter) params.set("gics_code", sectorFilter);
-    if (countryFilter) params.set("country_iso2", countryFilter);
-    const qs = params.toString();
-    const base = `/v1/companies${qs ? `?${qs}` : ""}`;
-
-    // If no cache, fetch first page fast
-    if (!cached) {
-      const sep = qs ? "&" : "?";
-      apiJson<CompanyRow[]>(`${base}${sep}limit=${PAGE_SIZE}`)
-        .then((rows) => { if (fetchId.current === id) setFirstPage(rows); })
-        .catch(() => { if (fetchId.current === id) setFirstPage([]); });
-    }
-
-    // Always fetch full dataset in background (refreshes cache)
-    apiJson<CompanyRow[]>(base)
-      .then((rows) => {
-        if (fetchId.current === id) {
-          setAllCompanies(rows);
-          writeCache(key, rows);
-        }
-      })
-      .catch(() => { if (fetchId.current === id && !cached) setAllCompanies([]); });
-  }, [user, sectorFilter, countryFilter, flushKey]);
-
-  const handleFlush = useCallback(() => {
-    clearCache("companies:");
-    setFirstPage(null);
-    setAllCompanies(null);
-    setFlushKey((k) => k + 1);
-  }, []);
+  const handleFlush = () => {
+    queryClient.invalidateQueries({ queryKey: ["companies"] });
+  };
 
   const submitRefresh = async () => {
     setSubmitting(true);
@@ -126,11 +85,7 @@ export default function Companies() {
     setPage(1);
   }, [search, sectorFilter, countryFilter]);
 
-  // Use full dataset when available, otherwise first page
-  const hasAll = allCompanies !== null;
-  const companies = allCompanies ?? firstPage ?? [];
-  const totalCount = firstPage?.[0]?.rank_total ?? companies.length;
-
+  const totalCount = companies.length;
   const q = search.toLowerCase();
   const filtered = q
     ? companies.filter(
@@ -140,13 +95,9 @@ export default function Companies() {
       )
     : companies;
 
-  // Use known total for pagination when full data isn't loaded yet (and not searching)
-  const paginationCount = q && hasAll ? filtered.length : hasAll ? filtered.length : totalCount;
-  const totalPages = Math.max(1, Math.ceil(paginationCount / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const visible = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-
-  const initialLoading = firstPage === null;
 
   if (loading || !user) return null;
 
@@ -156,9 +107,9 @@ export default function Companies() {
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold text-white">
             Companies
-            {!initialLoading && (
+            {!isLoading && (
               <span className="ml-2 text-base font-normal text-gray-500">
-                {q && hasAll
+                {q
                   ? `${filtered.length} of ${totalCount}`
                   : `${totalCount}`}
               </span>
@@ -198,11 +149,6 @@ export default function Companies() {
               placeholder="Search by name or ticker..."
               className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 pr-8 text-sm text-gray-300 placeholder-gray-500"
             />
-            {q && !hasAll && (
-              <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
-                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-600 border-t-gray-400" />
-              </div>
-            )}
           </div>
           <select
             value={countryFilter}
@@ -238,7 +184,7 @@ export default function Companies() {
       )}
 
       <div className="rounded-lg border border-gray-800 bg-gray-900">
-        {initialLoading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center p-12">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-gray-300" />
             <span className="ml-3 text-sm text-gray-500">Loading companies...</span>
@@ -248,10 +194,10 @@ export default function Companies() {
         )}
       </div>
 
-      {!initialLoading && totalPages > 1 && (
+      {!isLoading && totalPages > 1 && (
         <div className="mt-4 flex items-center justify-between text-sm">
           <span className="text-gray-500">
-            {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, paginationCount)} of {paginationCount}
+            {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}
           </span>
           <div className="flex items-center gap-2">
             <button

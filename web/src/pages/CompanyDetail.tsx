@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
+import { useEffect } from "react";
 import { useUser } from "@/lib/auth";
-import { apiJson } from "@/lib/api";
+import { useCompanyDetail } from "@/lib/queries";
 import ScoreCard from "@/components/ScoreCard";
 import StockChart from "@/components/StockChart";
 
@@ -97,22 +97,11 @@ export default function CompanyDetail() {
   const navigate = useNavigate();
   const { ticker: rawTicker } = useParams<{ ticker: string }>();
   const ticker = rawTicker?.toUpperCase() || "";
-  const [packet, setPacket] = useState<CompanyPacket | null>(null);
-  const [error, setError] = useState("");
+  const { data: packet, error, isLoading } = useCompanyDetail<CompanyPacket>(ticker);
 
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
-
-  useEffect(() => {
-    if (user && ticker) {
-      apiJson<CompanyPacket>(
-        `/v1/company/${ticker}/summary?include_evidence=true`
-      )
-        .then(setPacket)
-        .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
-    }
-  }, [user, ticker]);
 
   if (loading || !user) return null;
 
@@ -123,13 +112,13 @@ export default function CompanyDetail() {
           &larr; Back to Companies
         </Link>
         <div className="rounded border border-red-800 bg-red-900/30 px-4 py-3 text-red-300">
-          {error}
+          {(error as Error).message}
         </div>
       </div>
     );
   }
 
-  if (!packet) {
+  if (isLoading || !packet) {
     return <div className="text-gray-400">Loading...</div>;
   }
 

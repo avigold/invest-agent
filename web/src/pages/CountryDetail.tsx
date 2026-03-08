@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
+import { useEffect } from "react";
 import { useUser } from "@/lib/auth";
-import { apiJson } from "@/lib/api";
+import { useCountryDetail } from "@/lib/queries";
 import ScoreCard from "@/components/ScoreCard";
 
 interface CountryPacket {
@@ -86,22 +86,11 @@ export default function CountryDetail() {
   const navigate = useNavigate();
   const { iso2: rawIso2 } = useParams<{ iso2: string }>();
   const iso2 = rawIso2?.toUpperCase() || "";
-  const [packet, setPacket] = useState<CountryPacket | null>(null);
-  const [error, setError] = useState("");
+  const { data: packet, error, isLoading } = useCountryDetail<CountryPacket>(iso2);
 
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
-
-  useEffect(() => {
-    if (user && iso2) {
-      apiJson<CountryPacket>(
-        `/v1/country/${iso2}/summary?include_evidence=true`
-      )
-        .then(setPacket)
-        .catch((e) => setError(e.message));
-    }
-  }, [user, iso2]);
 
   if (loading || !user) return null;
 
@@ -112,13 +101,13 @@ export default function CountryDetail() {
           &larr; Back to Countries
         </Link>
         <div className="rounded border border-red-800 bg-red-900/30 px-4 py-3 text-red-300">
-          {error}
+          {(error as Error).message}
         </div>
       </div>
     );
   }
 
-  if (!packet) {
+  if (isLoading || !packet) {
     return <div className="text-gray-400">Loading...</div>;
   }
 

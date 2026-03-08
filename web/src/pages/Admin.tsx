@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
+import { useAdminStats, useAdminUsers, useAdminJobs, queryKeys } from "@/lib/queries";
+import { useQueryClient } from "@tanstack/react-query";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -98,19 +100,16 @@ function jobParamsLabel(job: AdminJob): string {
 export default function Admin() {
   const { user, loading } = useUser();
   const navigate = useNavigate();
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [jobs, setJobs] = useState<AdminJob[]>([]);
+  const queryClient = useQueryClient();
+  const { data: stats } = useAdminStats<Stats>();
+  const { data: users = [] } = useAdminUsers<AdminUser[]>();
+  const { data: jobs = [] } = useAdminJobs<AdminJob[]>();
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (loading) return;
     if (!user) { navigate("/login", { replace: true }); return; }
     if (user.role !== "admin") { navigate("/dashboard", { replace: true }); return; }
-
-    apiJson<Stats>("/api/admin/stats").then(setStats).catch(() => {});
-    apiJson<AdminUser[]>("/api/admin/users").then(setUsers).catch(() => setError("Failed to load users"));
-    apiJson<AdminJob[]>("/api/admin/jobs").then(setJobs).catch(() => {});
   }, [user, loading, navigate]);
 
   const setRole = async (userId: string, role: string) => {
@@ -120,8 +119,8 @@ export default function Admin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role }),
       });
-      setUsers((prev) =>
-        prev.map((u) =>
+      queryClient.setQueryData<AdminUser[]>(queryKeys.adminUsers(), (prev) =>
+        prev?.map((u) =>
           u.id === userId
             ? { ...u, role, plan: role === "admin" ? "pro" : u.sub_plan }
             : u,

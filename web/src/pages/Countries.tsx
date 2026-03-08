@@ -1,45 +1,27 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
-import { readCache, writeCache, clearCache } from "@/lib/cache";
+import { useCountries, queryKeys } from "@/lib/queries";
+import { useQueryClient } from "@tanstack/react-query";
 import CountryTable, { CountryRow } from "@/components/CountryTable";
 
 export default function Countries() {
   const { user, loading } = useUser();
   const navigate = useNavigate();
-  const [countries, setCountries] = useState<CountryRow[] | null>(null);
+  const queryClient = useQueryClient();
+  const { data: countries, isLoading } = useCountries<CountryRow[]>();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [flushKey, setFlushKey] = useState(0);
 
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
 
-  useEffect(() => {
-    if (!user) return;
-
-    // Try cache first
-    const cached = readCache<CountryRow[]>("countries:data");
-    if (cached) {
-      setCountries(cached);
-    }
-
-    // Always fetch fresh in background
-    apiJson<CountryRow[]>("/v1/countries")
-      .then((rows) => {
-        setCountries(rows);
-        writeCache("countries:data", rows);
-      })
-      .catch(() => { if (!cached) setCountries([]); });
-  }, [user, flushKey]);
-
-  const handleFlush = useCallback(() => {
-    clearCache("countries:");
-    setCountries(null);
-    setFlushKey((k) => k + 1);
-  }, []);
+  const handleFlush = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.countries() });
+  };
 
   const submitRefresh = async () => {
     setSubmitting(true);
@@ -60,8 +42,6 @@ export default function Countries() {
       setSubmitting(false);
     }
   };
-
-  const initialLoading = countries === null;
 
   if (loading || !user) return null;
 
@@ -96,13 +76,13 @@ export default function Countries() {
       )}
 
       <div className="rounded-lg border border-gray-800 bg-gray-900">
-        {initialLoading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center p-12">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-gray-300" />
             <span className="ml-3 text-sm text-gray-500">Loading countries...</span>
           </div>
         ) : (
-          <CountryTable countries={countries} />
+          <CountryTable countries={countries ?? []} />
         )}
       </div>
     </div>
