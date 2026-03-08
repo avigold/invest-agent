@@ -27,7 +27,7 @@ interface ChartResponse {
 
 const PERIODS = ["1W", "1M", "3M", "6M", "1Y", "5Y"] as const;
 
-export default function StockChart({ ticker }: { ticker: string }) {
+export default function StockChart({ ticker, embedded }: { ticker: string; embedded?: boolean }) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Area"> | null>(null);
@@ -66,7 +66,6 @@ export default function StockChart({ ticker }: { ticker: string }) {
           labelBackgroundColor: "#374151",
         },
       },
-      watermark: { visible: false },
       rightPriceScale: {
         borderColor: "#374151",
         minimumWidth: 80,
@@ -98,6 +97,11 @@ export default function StockChart({ ticker }: { ticker: string }) {
 
     chartRef.current = chart;
     seriesRef.current = series;
+
+    // Remove TradingView branding link
+    const container = chartContainerRef.current;
+    const brandingLink = container.querySelector('a[href*="tradingview"]');
+    if (brandingLink) brandingLink.remove();
 
     // Crosshair handler
     chart.subscribeCrosshairMove((param: MouseEventParams) => {
@@ -157,7 +161,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
   }, [data]);
 
   return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900 p-5 mb-8">
+    <div className={embedded ? "px-5 pt-3 pb-3" : "rounded-xl border border-gray-800 bg-gray-900 p-5 mb-8"}>
       {/* Price header */}
       {data?.latest && (
         <PriceHeader

@@ -266,9 +266,7 @@ function SpotlightCard({ pick }: { pick: MLScore }) {
       </div>
 
       {/* Embedded stock chart */}
-      <div className="px-0">
-        <StockChart ticker={pick.ticker} />
-      </div>
+      <StockChart ticker={pick.ticker} embedded />
     </div>
   );
 }
