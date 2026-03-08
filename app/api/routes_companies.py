@@ -23,6 +23,21 @@ from app.ingest.fmp import fetch_historical_prices
 from app.score.versions import COMPANY_CALC_VERSION, COMPANY_SUMMARY_VERSION
 from app.utils.market_hours import get_market_status
 
+_COUNTRY_CURRENCIES: dict[str, str] = {
+    "US": "USD", "CA": "CAD", "GB": "GBP", "AU": "AUD", "NZ": "NZD",
+    "JP": "JPY", "KR": "KRW", "BR": "BRL", "ZA": "ZAR", "SG": "SGD",
+    "HK": "HKD", "TW": "TWD", "IL": "ILS", "NO": "NOK", "SE": "SEK",
+    "DK": "DKK", "CH": "CHF",
+    # Eurozone
+    "DE": "EUR", "FR": "EUR", "NL": "EUR", "FI": "EUR",
+    "IE": "EUR", "BE": "EUR", "AT": "EUR",
+}
+
+
+def _country_currency(iso2: str | None) -> str:
+    return _COUNTRY_CURRENCIES.get(iso2 or "", "USD")
+
+
 router = APIRouter(prefix="/v1", tags=["companies"])
 
 
@@ -358,7 +373,7 @@ async def company_chart(
     return JSONResponse(
         content={
             "ticker": company.ticker,
-            "currency": "USD",
+            "currency": _country_currency(company.country_iso2),
             "period": period,
             "points": points_list,
             "latest": latest,

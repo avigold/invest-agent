@@ -15,10 +15,18 @@ interface Props {
   currency: string;
 }
 
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: "$", CAD: "C$", GBP: "£", AUD: "A$", NZD: "NZ$",
+  JPY: "¥", KRW: "₩", BRL: "R$", ZAR: "R", SGD: "S$",
+  HKD: "HK$", TWD: "NT$", ILS: "₪", NOK: "kr", SEK: "kr",
+  DKK: "kr", CHF: "CHF ", EUR: "€",
+};
+
 export default function PriceHeader({ latest, marketStatus, crosshairPrice, currency }: Props) {
   const displayPrice = crosshairPrice?.value ?? latest.value;
   const showChange = !crosshairPrice;
   const isPositive = latest.change_1d >= 0;
+  const symbol = CURRENCY_SYMBOLS[currency] ?? "";
 
   const fmt = (v: number) =>
     v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -27,7 +35,7 @@ export default function PriceHeader({ latest, marketStatus, crosshairPrice, curr
     <div className="mb-4">
       <div className="flex items-baseline gap-3 flex-wrap">
         <span className="text-3xl font-bold text-white tabular-nums">
-          {currency === "USD" ? "$" : ""}{fmt(displayPrice)}
+          {symbol}{fmt(displayPrice)}
         </span>
         {showChange && (
           <span
