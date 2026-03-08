@@ -84,15 +84,15 @@ export default function Dashboard() {
       apiJson<CountryPreview[]>("/v1/countries")
         .then((c) => setTopCountries(c.slice(0, 3)))
         .catch(() => {});
-      apiJson<CompanyPreview[]>("/v1/companies")
-        .then((c) => setTopCompanies(c.slice(0, 5)))
+      apiJson<CompanyPreview[]>("/v1/companies?limit=5")
+        .then((c) => setTopCompanies(c))
         .catch(() => {});
-      apiJson<IndustryPreview[]>("/v1/industries")
-        .then((ind) => setTopIndustries(ind.slice(0, 5)))
+      apiJson<IndustryPreview[]>("/v1/industries?limit=5")
+        .then((ind) => setTopIndustries(ind))
         .catch(() => {});
-      apiJson<LatestScores>("/v1/predictions/models/latest/scores")
+      apiJson<LatestScores>("/v1/predictions/models/latest/scores?limit=5")
         .then((data) => {
-          setMlScores(data.scores.slice(0, 5));
+          setMlScores(data.scores);
           setMlModel({
             version: data.model_version,
             auc: data.aggregate_metrics?.mean_auc,

@@ -40,10 +40,16 @@ async def list_recommendations(
     country_iso2: str | None = Query(None, description="Filter by country ISO2 code"),
     gics_code: str | None = Query(None, description="Filter by GICS sector code"),
     profile_id: uuid.UUID | None = Query(None, description="Scoring profile ID for custom rescoring"),
+    limit: int | None = Query(None, description="Max items to return (enables paginated response)"),
+    offset: int = Query(0, description="Number of items to skip"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return composite recommendations for all companies, sorted by composite_score desc."""
+    """Return composite recommendations for all companies, sorted by composite_score desc.
+
+    When ``limit`` is provided, returns ``{"items": [...], "total": N}``.
+    When ``limit`` is absent, returns a bare array (backward compatible).
+    """
     recommendations = await compute_recommendations(db)
 
     # Resolve scoring profile
@@ -66,6 +72,10 @@ async def list_recommendations(
         rec["profile_name"] = profile_name
         rec["is_custom_profile"] = profile is not None
 
+    if limit is not None:
+        total = len(recommendations)
+        return {"items": recommendations[offset:offset + limit], "total": total}
+
     return recommendations
 
 
@@ -80,7 +90,7 @@ async def recommendation_detail(
     Analysis is returned from cache only — trigger generation via the
     recommendation_analysis job command.
     """
-    ticker = ticker.upper()
+    ticker = ticker.replace("-", ".").upper()
 
     # Compute all recommendations and find this ticker
     recommendations = await compute_recommendations(db)

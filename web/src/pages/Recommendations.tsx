@@ -46,7 +46,11 @@ interface ProfileSummary {
 export default function Recommendations() {
   const { user, loading } = useUser();
   const navigate = useNavigate();
+  // First page (fast initial load when no cache)
+  const [firstPage, setFirstPage] = useState<RecommendationRow[] | null>(null);
+  // Full dataset (from cache or background fetch)
   const [recommendations, setRecommendations] = useState<RecommendationRow[] | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
   const [search, setSearch] = useState("");
   const [classFilter, setClassFilter] = useState("");
   const [countryFilter, setCountryFilter] = useState("");
@@ -89,9 +93,13 @@ export default function Recommendations() {
     const cached = readCache<RecommendationRow[]>(key);
     if (cached) {
       setRecommendations(cached);
+      setFirstPage(cached.slice(0, PAGE_SIZE));
+      setTotalCount(cached.length);
       setFetching(false);
     } else {
       setFetching(true);
+      setFirstPage(null);
+      setRecommendations(null);
     }
 
     const params = new URLSearchParams();
@@ -101,10 +109,28 @@ export default function Recommendations() {
     if (activeProfileId) params.set("profile_id", activeProfileId);
     const qs = params.toString();
 
+    // If no cache, fetch first page fast
+    if (!cached) {
+      const firstPageParams = new URLSearchParams(params);
+      firstPageParams.set("limit", String(PAGE_SIZE));
+      apiJson<{ items: RecommendationRow[]; total: number }>(
+        `/v1/recommendations?${firstPageParams.toString()}`
+      )
+        .then((res) => {
+          if (fetchId.current === id) {
+            setFirstPage(res.items);
+            setTotalCount(res.total);
+          }
+        })
+        .catch(() => { if (fetchId.current === id) setFirstPage([]); });
+    }
+
+    // Always fetch full dataset in background
     apiJson<RecommendationRow[]>(`/v1/recommendations${qs ? `?${qs}` : ""}`)
       .then((rows) => {
         if (fetchId.current === id) {
           setRecommendations(rows);
+          setTotalCount(rows.length);
           writeCache(key, rows);
         }
       })
@@ -114,6 +140,7 @@ export default function Recommendations() {
 
   const handleFlush = useCallback(() => {
     clearCache("recommendations:");
+    setFirstPage(null);
     setRecommendations(null);
     setFetching(true);
     setFlushKey((k) => k + 1);
@@ -139,7 +166,9 @@ export default function Recommendations() {
     setPage(1);
   }, [search, classFilter, countryFilter, sectorFilter]);
 
-  const recs = recommendations ?? [];
+  // Use full dataset when available, otherwise first page
+  const hasAll = recommendations !== null;
+  const recs = recommendations ?? firstPage ?? [];
   const q = search.toLowerCase();
   const filtered = q
     ? recs.filter(
@@ -149,11 +178,13 @@ export default function Recommendations() {
       )
     : recs;
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Use known total when full data isn't loaded yet (and not searching)
+  const paginationCount = hasAll || q ? filtered.length : totalCount;
+  const totalPages = Math.max(1, Math.ceil(paginationCount / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const visible = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  const initialLoading = recommendations === null;
+  const initialLoading = firstPage === null;
 
   if (loading || !user) return null;
 
@@ -167,11 +198,11 @@ export default function Recommendations() {
         <div>
           <h1 className="text-2xl font-bold text-white">
             Fundamentals
-            {!initialLoading && (
+            {!initialLoading && (totalCount > 0 || recs.length > 0) && (
               <span className="ml-2 text-base font-normal text-gray-500">
-                {q
-                  ? `${filtered.length} of ${recs.length}`
-                  : `${recs.length}`}
+                {q && hasAll
+                  ? `${filtered.length} of ${totalCount || recs.length}`
+                  : `${totalCount || recs.length}`}
               </span>
             )}
           </h1>
@@ -290,7 +321,7 @@ export default function Recommendations() {
       {!initialLoading && totalPages > 1 && (
         <div className="mt-4 flex items-center justify-between text-sm">
           <span className="text-gray-500">
-            {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}
+            {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, paginationCount)} of {paginationCount}
           </span>
           <div className="flex items-center gap-2">
             <button

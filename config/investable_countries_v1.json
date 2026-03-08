@@ -70,6 +70,104 @@
       "name": "Sweden",
       "equity_index_symbol": "OMXS30",
       "equity_index_name": "OMXS30"
+    },
+    {
+      "iso2": "KR",
+      "iso3": "KOR",
+      "name": "South Korea",
+      "equity_index_symbol": "^KS11",
+      "equity_index_name": "KOSPI"
+    },
+    {
+      "iso2": "BR",
+      "iso3": "BRA",
+      "name": "Brazil",
+      "equity_index_symbol": "^BVSP",
+      "equity_index_name": "Bovespa"
+    },
+    {
+      "iso2": "ZA",
+      "iso3": "ZAF",
+      "name": "South Africa",
+      "equity_index_symbol": "^J200.JO",
+      "equity_index_name": "JSE Top 40"
+    },
+    {
+      "iso2": "SG",
+      "iso3": "SGP",
+      "name": "Singapore",
+      "equity_index_symbol": "^STI",
+      "equity_index_name": "STI"
+    },
+    {
+      "iso2": "HK",
+      "iso3": "HKG",
+      "name": "Hong Kong",
+      "equity_index_symbol": "^HSI",
+      "equity_index_name": "Hang Seng"
+    },
+    {
+      "iso2": "NO",
+      "iso3": "NOR",
+      "name": "Norway",
+      "equity_index_symbol": "OSEBX.OL",
+      "equity_index_name": "OSEBX"
+    },
+    {
+      "iso2": "DK",
+      "iso3": "DNK",
+      "name": "Denmark",
+      "equity_index_symbol": "^OMXC25",
+      "equity_index_name": "OMXC25"
+    },
+    {
+      "iso2": "FI",
+      "iso3": "FIN",
+      "name": "Finland",
+      "equity_index_symbol": "^OMXH25",
+      "equity_index_name": "OMXH25"
+    },
+    {
+      "iso2": "IL",
+      "iso3": "ISR",
+      "name": "Israel",
+      "equity_index_symbol": "^TA125.TA",
+      "equity_index_name": "TA-125"
+    },
+    {
+      "iso2": "NZ",
+      "iso3": "NZL",
+      "name": "New Zealand",
+      "equity_index_symbol": "^NZ50",
+      "equity_index_name": "NZX 50"
+    },
+    {
+      "iso2": "TW",
+      "iso3": "TWN",
+      "name": "Taiwan",
+      "equity_index_symbol": "^TWII",
+      "equity_index_name": "TAIEX"
+    },
+    {
+      "iso2": "IE",
+      "iso3": "IRL",
+      "name": "Ireland",
+      "equity_index_symbol": "^ISEQ",
+      "equity_index_name": "ISEQ Overall"
+    },
+    {
+      "iso2": "BE",
+      "iso3": "BEL",
+      "name": "Belgium",
+      "equity_index_symbol": "^BFX",
+      "equity_index_name": "BEL 20"
+    },
+    {
+      "iso2": "AT",
+      "iso3": "AUT",
+      "name": "Austria",
+      "equity_index_symbol": "^ATX",
+      "equity_index_name": "ATX"
     }
   ],
   "world_bank_indicators": {

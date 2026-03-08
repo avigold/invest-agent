@@ -54,6 +54,20 @@ _ISO2_TO_FIPS: dict[str, str] = {
     "NL": "NL",
     "CH": "SZ",
     "SE": "SW",
+    "KR": "KS",
+    "BR": "BR",
+    "ZA": "SF",
+    "SG": "SN",
+    "HK": "HK",
+    "NO": "NO",
+    "DK": "DA",
+    "FI": "FI",
+    "IL": "IS",
+    "NZ": "NZ",
+    "TW": "TW",
+    "IE": "EI",
+    "BE": "BE",
+    "AT": "AU",
 }
 
 
@@ -106,16 +120,27 @@ async def _fetch_with_retries(
     label: str,
     log_fn: Callable[[str], None],
 ) -> str | None:
-    """Fetch a GDELT CSV with up to 3 retries."""
+    """Fetch a GDELT CSV with up to 3 retries, with exponential backoff for 429s."""
     last_err: Exception | None = None
     for attempt in range(3):
         try:
             return await _fetch_gdelt_csv(client, query)
+        except httpx.HTTPStatusError as e:
+            last_err = e
+            if e.response.status_code == 429 and attempt < 2:
+                wait = 30 * (attempt + 1)  # 30s, 60s
+                log_fn(f"  GDELT {label}: 429 rate-limited, waiting {wait}s...")
+                await asyncio.sleep(wait)
+            elif attempt < 2:
+                log_fn(f"  GDELT {label}: attempt {attempt + 1} failed ({e}), retrying...")
+                await asyncio.sleep(10)
+            else:
+                break
         except Exception as e:
             last_err = e
             if attempt < 2:
                 log_fn(f"  GDELT {label}: attempt {attempt + 1} failed ({e}), retrying...")
-                await asyncio.sleep(5)
+                await asyncio.sleep(10)
     log_fn(f"  GDELT {label}: all attempts failed ({last_err})")
     return None
 
@@ -167,7 +192,7 @@ async def ingest_gdelt_stability(
                 client, instability_query, f"{country.iso2} instability", log_fn,
             )
             # Brief pause between the two queries
-            await asyncio.sleep(2)
+            await asyncio.sleep(5)
             total_csv = await _fetch_with_retries(
                 client, total_query, f"{country.iso2} total", log_fn,
             )
@@ -272,6 +297,6 @@ async def ingest_gdelt_stability(
     await db.execute(stmt)
 
     # Longer delay between countries to respect GDELT rate limits
-    await asyncio.sleep(3)
+    await asyncio.sleep(10)
 
     return [artefact.id]

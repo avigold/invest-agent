@@ -19,6 +19,7 @@ from app.db.models import (
     User,
 )
 from app.db.session import get_db
+from app.ingest.fmp import fetch_historical_prices
 from app.score.versions import COMPANY_CALC_VERSION, COMPANY_SUMMARY_VERSION
 from app.utils.market_hours import get_market_status
 
@@ -124,6 +125,7 @@ async def company_summary(
     db: AsyncSession = Depends(get_db),
 ):
     """Return the full decision packet for a single company."""
+    ticker = ticker.replace("-", ".")
     result = await db.execute(
         select(Company).where(Company.ticker == ticker.upper())
     )
@@ -169,6 +171,55 @@ PERIOD_DAYS = {
 }
 
 
+async def _fmp_chart_fallback(ticker: str, period: str) -> JSONResponse:
+    """Fetch chart data from FMP for tickers not in the Company DB."""
+    import os
+    import httpx
+
+    api_key = os.environ.get("FMP_API_KEY")
+    start_date = date.today() - timedelta(days=PERIOD_DAYS[period])
+    points_list: list[dict] = []
+
+    if api_key:
+        try:
+            async with httpx.AsyncClient() as client:
+                rows, _ = await fetch_historical_prices(
+                    client, ticker, api_key, from_date=str(start_date),
+                )
+            points_list = [
+                {"date": r["date"], "value": float(r["price"])}
+                for r in rows if r.get("price") is not None
+            ]
+        except Exception:
+            pass  # Return empty points on failure
+
+    latest = None
+    if len(points_list) >= 2:
+        last, prev = points_list[-1], points_list[-2]
+        change = last["value"] - prev["value"]
+        pct = change / prev["value"] if prev["value"] != 0 else 0
+        latest = {
+            "date": last["date"], "value": last["value"],
+            "change_1d": round(change, 4), "change_1d_pct": round(pct, 6),
+            "prev_close": prev["value"],
+        }
+    elif len(points_list) == 1:
+        last = points_list[0]
+        latest = {
+            "date": last["date"], "value": last["value"],
+            "change_1d": 0, "change_1d_pct": 0, "prev_close": last["value"],
+        }
+
+    return JSONResponse(
+        content={
+            "ticker": ticker, "currency": "USD", "period": period,
+            "points": points_list, "latest": latest,
+            "market_status": {"is_open": False, "exchange": "", "next_open": "", "last_close_time": ""},
+        },
+        headers={"Cache-Control": "private, max-age=60"},
+    )
+
+
 @router.get("/company/{ticker}/chart")
 async def company_chart(
     ticker: str,
@@ -177,6 +228,7 @@ async def company_chart(
     db: AsyncSession = Depends(get_db),
 ):
     """Return historical price data for charting."""
+    ticker = ticker.replace("-", ".")
     if period not in PERIOD_DAYS:
         raise HTTPException(status_code=400, detail=f"Invalid period '{period}'. Must be one of: {', '.join(PERIOD_DAYS)}")
 
@@ -185,7 +237,7 @@ async def company_chart(
     )
     company = result.scalar_one_or_none()
     if company is None:
-        raise HTTPException(status_code=404, detail=f"Company '{ticker}' not found")
+        return await _fmp_chart_fallback(ticker.upper(), period)
 
     start_date = date.today() - timedelta(days=PERIOD_DAYS[period])
     start_str = str(start_date)

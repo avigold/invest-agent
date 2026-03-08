@@ -22,6 +22,7 @@ const ScreenerResult = lazy(() => import("@/pages/ScreenerResult"));
 const Predictions = lazy(() => import("@/pages/Predictions"));
 const PredictionDetail = lazy(() => import("@/pages/PredictionDetail"));
 const MLPicks = lazy(() => import("@/pages/MLPicks"));
+const MLStockDetail = lazy(() => import("@/pages/MLStockDetail"));
 
 export default function App() {
   return (
@@ -53,6 +54,7 @@ export default function App() {
                   <Route path="/predictions" element={<Predictions />} />
                   <Route path="/predictions/:id" element={<PredictionDetail />} />
                   <Route path="/ml/picks" element={<MLPicks />} />
+                  <Route path="/ml/picks/:ticker" element={<MLStockDetail />} />
                   <Route path="/ml/models" element={<Predictions />} />
                   <Route path="/ml/models/:id" element={<PredictionDetail />} />
                   <Route path="/admin" element={<Admin />} />

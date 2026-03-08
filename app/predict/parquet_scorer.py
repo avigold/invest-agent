@@ -39,6 +39,29 @@ _CONFIDENCE_TIERS = [
     (0.0, "negligible"),
 ]
 
+# ── Exchange suffix → country ISO2 ────────────────────────────────────
+# Used to identify "home" listings: prefer the ticker whose exchange
+# matches the company's country_iso2, removing foreign cross-listings
+# before the model scores (so noise from foreign market data is eliminated).
+_EXCHANGE_COUNTRY: dict[str, str] = {
+    "": "US",    # No suffix = NYSE/NASDAQ
+    "L": "GB",   "T": "JP",   "DE": "DE",  "F": "DE",
+    "SW": "CH",  "AX": "AU",  "NE": "NL",  "AS": "NL",
+    "HK": "HK",  "SS": "CN",  "SZ": "CN",  "KS": "KR",
+    "SA": "BR",  "JO": "ZA",  "SI": "SG",  "TW": "TW",
+    "OL": "NO",  "CO": "DK",  "HE": "FI",  "TA": "IL",
+    "NZ": "NZ",  "IR": "IE",  "BR": "BE",  "VI": "AT",
+    "ST": "SE",  "PA": "FR",  "TO": "CA",  "V": "CA",
+}
+
+
+def _exchange_country(ticker: str) -> str:
+    """Determine the exchange country from a ticker's suffix."""
+    if "." in ticker:
+        suffix = ticker.rsplit(".", 1)[1]
+        return _EXCHANGE_COUNTRY.get(suffix, "")
+    return _EXCHANGE_COUNTRY.get("", "US")
+
 
 def _confidence_tier(probability: float) -> str:
     for threshold, tier in _CONFIDENCE_TIERS:
@@ -133,6 +156,27 @@ def score_from_parquet(
     df = df.sort_values("fiscal_year", ascending=False)
     df = df.drop_duplicates(subset="ticker", keep="first").copy()
     log(f"After dedup (most recent year per ticker): {len(df)} rows")
+
+    # ── Build home-ticker lookup ─────────────────────────────────────
+    # For each company, find the ticker on the home exchange (exchange country
+    # matches company's country_iso2). After post-scoring dedup, the winning
+    # ticker is corrected to the home listing so users see actionable symbols
+    # (e.g. AAPL instead of APC.DE) while keeping the best probability.
+    _home_ticker_map: dict[str, str] = {}  # normalized company name → home ticker
+    if deduplicate:
+        for _, r in df.iterrows():
+            key = str(r.get("company_name", "")).strip().lower()
+            if not key:
+                continue
+            ticker = str(r["ticker"])
+            is_home = _exchange_country(ticker) == r["country_iso2"]
+            if key not in _home_ticker_map:
+                _home_ticker_map[key] = ticker  # first seen = fallback
+            elif is_home:
+                # Home listing overrides any previous non-home
+                prev = _home_ticker_map[key]
+                if _exchange_country(prev) != r["country_iso2"]:
+                    _home_ticker_map[key] = ticker
 
     if len(df) == 0:
         log("No stocks to score.")
@@ -240,16 +284,24 @@ def score_from_parquet(
     if deduplicate:
         seen: set[str] = set()
         deduped: list[ScoredStock] = []
+        n_corrected = 0
         for s in scored:
             key = s.company_name.strip().lower()
             if key in seen:
                 continue
             seen.add(key)
+            # Correct ticker to home listing (e.g. APC.DE → AAPL)
+            home = _home_ticker_map.get(key)
+            if home and home != s.ticker:
+                s.ticker = home
+                n_corrected += 1
             deduped.append(s)
         n_dupes = len(scored) - len(deduped)
         if n_dupes > 0:
             log(f"Deduplicated: removed {n_dupes} duplicate listings, "
                 f"{len(deduped)} unique companies remain")
+        if n_corrected > 0:
+            log(f"Corrected {n_corrected} tickers to home listings")
         scored = deduped
 
     # ── Portfolio construction ──────────────────────────────────────────

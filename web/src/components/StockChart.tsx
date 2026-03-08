@@ -150,7 +150,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
   const fetchData = useCallback(async () => {
     try {
       const res = await apiJson<ChartResponse>(
-        `/v1/company/${ticker}/chart?period=${period}`
+        `/v1/company/${ticker.replace(/\./g, "-")}/chart?period=${period}`
       );
       setData(res);
       if (seriesRef.current && res.points.length > 0) {

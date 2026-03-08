@@ -15,6 +15,7 @@ from app.predict.parquet_scorer import (
     ScoredStock,
     _build_portfolio,
     _confidence_tier,
+    _exchange_country,
     _gics_to_sector,
     _kelly_fraction,
     score_from_parquet,
@@ -117,6 +118,28 @@ class TestConfidenceTier:
 
     def test_negligible(self):
         assert _confidence_tier(0.02) == "negligible"
+
+
+# ── Exchange Country Mapping ────────────────────────────────────
+
+
+class TestExchangeCountry:
+    def test_us_no_suffix(self):
+        assert _exchange_country("AAPL") == "US"
+        assert _exchange_country("MSFT") == "US"
+
+    def test_german_suffix(self):
+        assert _exchange_country("APC.DE") == "DE"
+        assert _exchange_country("APC.F") == "DE"
+
+    def test_other_exchanges(self):
+        assert _exchange_country("7203.T") == "JP"
+        assert _exchange_country("VOD.L") == "GB"
+        assert _exchange_country("GOOGL.SW") == "CH"
+        assert _exchange_country("RY.TO") == "CA"
+
+    def test_unknown_suffix(self):
+        assert _exchange_country("TICKER.XYZ") == ""
 
 
 # ── GICS Sector Mapping ─────────────────────────────────────────
@@ -239,15 +262,71 @@ class TestScoreFromParquet:
         feature_names = ["inc_revenue", "gross_margin", "cat_gics_code", "cat_country_iso2"]
         model = _make_mock_model(feature_names)
 
-        # With dedup (default)
+        # With dedup (default) — home listing (NVDA) should be kept
         scored = score_from_parquet(path, model, model_config={})
         company_names = [s.company_name for s in scored]
         assert len(company_names) == 8  # 10 tickers - 2 NVIDIA dupes
         assert company_names.count("NVIDIA Corporation") == 1
+        # The kept ticker should be NVDA (US home listing), not NVD.DE or NVD.F
+        nvidia = [s for s in scored if s.company_name == "NVIDIA Corporation"][0]
+        assert nvidia.ticker == "NVDA"
 
         # Without dedup
         scored_all = score_from_parquet(path, model, model_config={}, deduplicate=False)
         assert len(scored_all) == 10
+
+    def test_corrects_ticker_to_home_listing(self, tmp_path):
+        """After dedup, foreign cross-listed ticker should be corrected to home listing."""
+        rows = []
+        base = {
+            "fiscal_year": 2024, "statement_date": "2024-12-31",
+            "reported_currency": "USD", "country_iso2": "US",
+            "gics_code": "45",
+            "inc_revenue": 5000.0, "inc_netIncome": 500.0,
+            "gross_margin": 0.5, "roe": 0.3,
+            "momentum_12m": 0.2, "volatility_12m": 0.3,
+            "max_dd_12m": -0.1,
+            "relative_strength_12m": None, "beta_vs_index": None,
+            "fwd_return_3m": 0.0, "fwd_return_6m": 0.0,
+            "fwd_return_12m": 0.5, "fwd_return_24m": 1.0,
+            "fwd_max_dd_12m": -0.1, "fwd_label": "winner",
+        }
+        # Apple: US company with US and foreign listings
+        for ticker, dvol in [
+            ("AAPL", 8_000_000),       # US listing (home)
+            ("APC.DE", 9_000_000),     # Frankfurt (foreign)
+            ("APC.F", 7_000_000),      # Frankfurt (foreign)
+        ]:
+            rows.append({**base, "ticker": ticker, "company_name": "Apple Inc.",
+                         "dollar_volume_30d": float(dvol)})
+        # Toyota: JP company with JP and US listings
+        for ticker, country, dvol in [
+            ("7203.T", "JP", 6_000_000),   # Tokyo listing (home)
+            ("TM", "JP", 5_000_000),       # US ADR (foreign for JP company)
+        ]:
+            rows.append({**base, "ticker": ticker, "company_name": "Toyota Motor Corp",
+                         "country_iso2": country, "dollar_volume_30d": float(dvol)})
+
+        table = pa.Table.from_pylist(rows)
+        path = str(tmp_path / "cross_list_test.parquet")
+        pq.write_table(table, path)
+
+        feature_names = ["inc_revenue", "gross_margin", "cat_gics_code", "cat_country_iso2"]
+        model = _make_mock_model(feature_names)
+
+        scored = score_from_parquet(path, model, model_config={})
+        tickers = {s.ticker for s in scored}
+
+        # Apple: whichever listing won the dedup, the ticker should be AAPL (home)
+        assert "AAPL" in tickers
+        assert "APC.DE" not in tickers
+        assert "APC.F" not in tickers
+
+        # Toyota: ticker should be 7203.T (JP home)
+        assert "7203.T" in tickers
+        assert "TM" not in tickers
+
+        assert len(scored) == 2  # One per company
 
     def test_feature_alignment(self, tmp_path):
         path = _make_parquet(tmp_path, n_tickers=5, n_years=1)

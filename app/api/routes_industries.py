@@ -22,6 +22,7 @@ router = APIRouter(prefix="/v1", tags=["industries"])
 @router.get("/industries")
 async def list_industries(
     iso2: str | None = Query(None, description="Filter by country ISO2 code"),
+    limit: int | None = Query(None, ge=1, description="Max results to return"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -68,6 +69,8 @@ async def list_industries(
         scores_q = scores_q.where(Country.iso2 == iso2.upper())
 
     scores_q = scores_q.order_by(desc(IndustryScore.overall_score))
+    if limit is not None:
+        scores_q = scores_q.limit(limit)
 
     result = await db.execute(scores_q)
     rows = result.all()
