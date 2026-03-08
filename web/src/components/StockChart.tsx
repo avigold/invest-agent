@@ -66,6 +66,7 @@ export default function StockChart({ ticker }: { ticker: string }) {
           labelBackgroundColor: "#374151",
         },
       },
+      watermark: { visible: false },
       rightPriceScale: {
         borderColor: "#374151",
         minimumWidth: 80,

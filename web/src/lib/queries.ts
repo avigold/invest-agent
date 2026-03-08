@@ -172,8 +172,8 @@ export function useDashboardIndustries<T = unknown[]>() {
 
 export function useMLLatestScores<T = unknown>() {
   return useQuery<T>({
-    queryKey: queryKeys.mlLatestScores(5),
-    queryFn: () => apiJson<T>("/v1/predictions/models/latest/scores?limit=5"),
+    queryKey: queryKeys.mlLatestScores(10),
+    queryFn: () => apiJson<T>("/v1/predictions/models/latest/scores?limit=10"),
   });
 }
 
