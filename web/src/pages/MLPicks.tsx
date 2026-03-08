@@ -63,9 +63,9 @@ export default function MLPicks() {
   const [page, setPage] = useState(1);
 
   // Dependent queries: models → latest model → scores
-  const { data: models = [], error: modelsError } = useMLModels<ModelSummary[]>();
+  const { data: models = [], error: modelsError, isLoading: modelsLoading } = useMLModels<ModelSummary[]>();
   const latestModel = models.length > 0 ? models[0] : null;
-  const { data: scoresData } = useMLModelScores<{ items: Score[]; total: number }>(
+  const { data: scoresData, isLoading: scoresLoading } = useMLModelScores<{ items: Score[]; total: number }>(
     latestModel?.id || "",
   );
 
@@ -165,7 +165,7 @@ export default function MLPicks() {
     setPage(1);
   }, [search, sortKey, sortDir]);
 
-  const initialLoading = models.length === 0 && !modelsError;
+  const initialLoading = modelsLoading;
 
   if (loading || !user) return null;
   if (!initialLoading && modelsError && scores.length === 0) {
@@ -219,12 +219,19 @@ export default function MLPicks() {
           <span className="ml-3 text-sm text-gray-500">Loading scores...</span>
         </div>
       ) : scores.length === 0 ? (
-        <div className="rounded-xl border border-gray-800 bg-gray-900/80 p-8 text-center">
-          <p className="text-gray-400">No scores available yet.</p>
-          <p className="mt-2 text-sm text-gray-600">
-            Run <code className="rounded bg-gray-800 px-1.5 py-0.5 text-xs">python -m app.cli score-universe</code> to score the universe.
-          </p>
-        </div>
+        scoresLoading ? (
+          <div className="rounded-xl border border-gray-800 bg-gray-900/80 p-12 flex items-center justify-center">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-gray-300" />
+            <span className="ml-3 text-sm text-gray-500">Loading scores...</span>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-gray-800 bg-gray-900/80 p-8 text-center">
+            <p className="text-gray-400">No scores available yet.</p>
+            <p className="mt-2 text-sm text-gray-600">
+              Run <code className="rounded bg-gray-800 px-1.5 py-0.5 text-xs">python -m app.cli score-universe</code> to score the universe.
+            </p>
+          </div>
+        )
       ) : (
         <>
           {/* Summary cards */}
@@ -341,7 +348,7 @@ export default function MLPicks() {
                             </span>
                           )}
                           <div>
-                            <Link to={`/ml/picks/${s.ticker}`} className="font-medium text-white hover:text-blue-400">
+                            <Link to={`/stocks/${s.ticker}`} className="font-medium text-white hover:text-blue-400">
                               {s.ticker}
                             </Link>
                             <div className="text-xs text-gray-500">{s.company_name}</div>

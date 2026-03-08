@@ -120,7 +120,9 @@ export default function PredictionDetail() {
 
   const agg = model.aggregate_metrics;
   const bt = model.backtest_results;
-  const fi = Object.entries(model.feature_importance).slice(0, 15);
+  const fi = Object.entries(model.feature_importance)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15);
   const maxImp = fi.length > 0 ? fi[0][1] : 1;
 
   const visibleScores = showAllScores ? scores : scores.slice(0, 20);
@@ -213,15 +215,17 @@ export default function PredictionDetail() {
         </h2>
         <div className="space-y-1.5">
           {fi.map(([name, imp]) => (
-            <div key={name} className="flex items-center gap-3">
-              <div className="w-40 truncate text-xs text-gray-300">{name}</div>
-              <div className="flex-1">
-                <div
-                  className="h-4 rounded bg-blue-600/60"
-                  style={{ width: `${(imp / maxImp) * 100}%` }}
-                />
+            <div key={name} className="flex items-center gap-3 min-w-0">
+              <div className="w-40 flex-shrink-0 truncate text-xs text-gray-300">{name}</div>
+              <div className="flex-1 min-w-0">
+                <div className="h-4 w-full rounded bg-gray-800">
+                  <div
+                    className="h-4 rounded bg-blue-600/60"
+                    style={{ width: `${(imp / maxImp) * 100}%` }}
+                  />
+                </div>
               </div>
-              <div className="w-14 text-right text-xs font-mono text-gray-400">
+              <div className="w-14 flex-shrink-0 text-right text-xs font-mono text-gray-400">
                 {(imp * 100).toFixed(1)}%
               </div>
             </div>
@@ -286,7 +290,7 @@ export default function PredictionDetail() {
                 <tr key={s.id} className="border-b border-gray-800/50 hover:bg-white/[0.015]">
                   <td className="px-3 py-2">
                     <Link
-                      to={`/companies/${s.ticker}`}
+                      to={`/stocks/${s.ticker}`}
                       className="font-medium text-blue-400 hover:text-blue-300"
                     >
                       {s.ticker}
@@ -313,7 +317,7 @@ export default function PredictionDetail() {
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-1">
-                      {Object.entries(s.contributing_features)
+                      {Object.entries(s.contributing_features || {})
                         .slice(0, 3)
                         .map(([feat, data]) => (
                           <span

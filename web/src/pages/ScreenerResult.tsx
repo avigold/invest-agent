@@ -626,7 +626,7 @@ function V2Layout({ result, analysis, jobStatus, jobError, analyzePatterns }: La
                   return (
                     <tr key={c.ticker} className="border-b border-gray-800/50 hover:bg-white/[0.015] transition-colors">
                       <td className="px-4 py-3">
-                        <Link to={`/companies/${c.ticker}`} className="font-mono text-blue-400 hover:text-blue-300">
+                        <Link to={`/stocks/${c.ticker}`} className="font-mono text-blue-400 hover:text-blue-300">
                           {c.ticker}
                         </Link>
                       </td>
@@ -715,7 +715,7 @@ function WinnerObservationsTable({ observations }: { observations: ObservationRo
               {winners.map((o, i) => (
                 <tr key={`${o.ticker}-${o.obs_date}-${i}`} className="border-b border-gray-800/50 hover:bg-white/[0.015] transition-colors">
                   <td className="px-4 py-3">
-                    <Link to={`/companies/${o.ticker}`} className="font-mono text-blue-400 hover:text-blue-300">
+                    <Link to={`/stocks/${o.ticker}`} className="font-mono text-blue-400 hover:text-blue-300">
                       {o.ticker}
                     </Link>
                   </td>
@@ -830,7 +830,7 @@ function V1Layout({ result, analysis, jobStatus, jobError, analyzePatterns }: La
                   return (
                     <tr key={c.ticker} className="border-b border-gray-800/50 hover:bg-white/[0.015] transition-colors">
                       <td className="px-4 py-3">
-                        <Link to={`/companies/${c.ticker}`} className="font-mono text-blue-400 hover:text-blue-300">{c.ticker}</Link>
+                        <Link to={`/stocks/${c.ticker}`} className="font-mono text-blue-400 hover:text-blue-300">{c.ticker}</Link>
                       </td>
                       <td className="px-4 py-3 text-gray-300">{c.name}</td>
                       <td className="px-4 py-3 text-right">
@@ -893,7 +893,7 @@ function V1Layout({ result, analysis, jobStatus, jobError, analyzePatterns }: La
               {matches.map((m) => (
                 <tr key={m.ticker} className="border-b border-gray-800/50 hover:bg-white/[0.015] transition-colors">
                   <td className="px-4 py-3">
-                    <Link to={`/companies/${m.ticker}`} className="font-mono text-blue-400 hover:text-blue-300">{m.ticker}</Link>
+                    <Link to={`/stocks/${m.ticker}`} className="font-mono text-blue-400 hover:text-blue-300">{m.ticker}</Link>
                   </td>
                   <td className="px-4 py-3 text-gray-300">{m.name}</td>
                   <td className="px-4 py-3 text-right">

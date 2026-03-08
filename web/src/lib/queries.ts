@@ -48,6 +48,7 @@ export function useCompanyDetail<T = unknown>(ticker: string) {
     queryKey: queryKeys.company(ticker),
     queryFn: () => apiJson<T>(`/v1/company/${ticker}/summary?include_evidence=true`),
     enabled: !!ticker,
+    retry: false,
   });
 }
 
@@ -64,6 +65,7 @@ export function useMLStockDetail<T = unknown>(ticker: string) {
     queryKey: queryKeys.mlStock(ticker),
     queryFn: () => apiJson<T>(`/v1/predictions/score/${ticker.replace(/\./g, "-")}`),
     enabled: !!ticker,
+    retry: false,
   });
 }
 

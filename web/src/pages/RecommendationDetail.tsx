@@ -287,7 +287,7 @@ export default function RecommendationDetail() {
 
         {/* Company */}
         <Link
-          to={`/companies/${company.ticker}`}
+          to={`/stocks/${company.ticker}`}
           className="group rounded-lg border border-gray-800 bg-gray-900 p-4 hover:border-emerald-700 transition-colors"
         >
           <div className="mb-1 flex items-center justify-between">

@@ -89,7 +89,7 @@ export default function CompanyTable({
               </td>
               <td className="px-4 py-3">
                 <Link
-                  to={`/companies/${row.ticker}`}
+                  to={`/stocks/${row.ticker}`}
                   className="text-white hover:text-brand transition-colors"
                 >
                   {row.name}

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate, useParams } from "react-router-dom";
 import NavBar from "@/components/NavBar";
 
 const Home = lazy(() => import("@/pages/Home"));
@@ -9,7 +9,7 @@ const Countries = lazy(() => import("@/pages/Countries"));
 const CountryDetail = lazy(() => import("@/pages/CountryDetail"));
 const Companies = lazy(() => import("@/pages/Companies"));
 const AddCompanies = lazy(() => import("@/pages/AddCompanies"));
-const CompanyDetail = lazy(() => import("@/pages/CompanyDetail"));
+const StockDetail = lazy(() => import("@/pages/StockDetail"));
 const Industries = lazy(() => import("@/pages/Industries"));
 const IndustryDetail = lazy(() => import("@/pages/IndustryDetail"));
 const Recommendations = lazy(() => import("@/pages/Recommendations"));
@@ -22,7 +22,11 @@ const ScreenerResult = lazy(() => import("@/pages/ScreenerResult"));
 const Predictions = lazy(() => import("@/pages/Predictions"));
 const PredictionDetail = lazy(() => import("@/pages/PredictionDetail"));
 const MLPicks = lazy(() => import("@/pages/MLPicks"));
-const MLStockDetail = lazy(() => import("@/pages/MLStockDetail"));
+
+function RedirectToStock() {
+  const { ticker } = useParams<{ ticker: string }>();
+  return <Navigate to={`/stocks/${ticker}`} replace />;
+}
 
 export default function App() {
   return (
@@ -44,7 +48,8 @@ export default function App() {
                   <Route path="/fundamentals/:ticker" element={<RecommendationDetail />} />
                   <Route path="/companies" element={<Companies />} />
                   <Route path="/companies/add" element={<AddCompanies />} />
-                  <Route path="/companies/:ticker" element={<CompanyDetail />} />
+                  <Route path="/stocks/:ticker" element={<StockDetail />} />
+                  <Route path="/companies/:ticker" element={<RedirectToStock />} />
                   <Route path="/industries" element={<Industries />} />
                   <Route path="/industries/:gics_code" element={<IndustryDetail />} />
                   <Route path="/jobs" element={<Jobs />} />
@@ -54,7 +59,7 @@ export default function App() {
                   <Route path="/predictions" element={<Predictions />} />
                   <Route path="/predictions/:id" element={<PredictionDetail />} />
                   <Route path="/ml/picks" element={<MLPicks />} />
-                  <Route path="/ml/picks/:ticker" element={<MLStockDetail />} />
+                  <Route path="/ml/picks/:ticker" element={<RedirectToStock />} />
                   <Route path="/ml/models" element={<Predictions />} />
                   <Route path="/ml/models/:id" element={<PredictionDetail />} />
                   <Route path="/admin" element={<Admin />} />

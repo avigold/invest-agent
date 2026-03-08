@@ -149,16 +149,67 @@ async def company_summary(
 
     result = await db.execute(query)
     packet = result.scalar_one_or_none()
-    if packet is None:
+
+    if packet is not None:
+        content = dict(packet.content)
+        if not include_evidence:
+            content["evidence"] = None
+        return content
+
+    # Fallback: build response from CompanyScore when no DecisionPacket exists
+    score_q = (
+        select(CompanyScore)
+        .where(
+            CompanyScore.company_id == company.id,
+            CompanyScore.calc_version == COMPANY_CALC_VERSION,
+        )
+        .order_by(desc(CompanyScore.as_of))
+        .limit(1)
+    )
+    score_result = await db.execute(score_q)
+    score = score_result.scalar_one_or_none()
+    if score is None:
         raise HTTPException(
             status_code=404,
-            detail=f"No decision packet found for {ticker}",
+            detail=f"No data found for {ticker}",
         )
 
-    content = dict(packet.content)
-    if not include_evidence:
-        content["evidence"] = None
-    return content
+    # Count total scored companies for rank_total
+    from sqlalchemy import func as sa_func
+    count_q = select(sa_func.count()).select_from(CompanyScore).where(
+        CompanyScore.as_of == score.as_of,
+        CompanyScore.calc_version == COMPANY_CALC_VERSION,
+    )
+    total = (await db.execute(count_q)).scalar() or 0
+
+    # Compute rank (how many have higher overall_score)
+    rank_q = select(sa_func.count()).select_from(CompanyScore).where(
+        CompanyScore.as_of == score.as_of,
+        CompanyScore.calc_version == COMPANY_CALC_VERSION,
+        CompanyScore.overall_score > score.overall_score,
+    )
+    rank = ((await db.execute(rank_q)).scalar() or 0) + 1
+
+    return {
+        "ticker": company.ticker,
+        "cik": getattr(company, "cik", None) or "",
+        "company_name": company.name,
+        "gics_code": company.gics_code,
+        "country_iso2": company.country_iso2,
+        "as_of": str(score.as_of),
+        "calc_version": score.calc_version,
+        "summary_version": "score_fallback",
+        "scores": {
+            "overall": float(score.overall_score),
+            "fundamental": float(score.fundamental_score),
+            "market": float(score.market_score),
+        },
+        "rank": rank,
+        "rank_total": total,
+        "component_data": score.component_data or {},
+        "risks": [],
+        "evidence": None,
+    }
 
 
 PERIOD_DAYS = {
