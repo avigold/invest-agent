@@ -328,7 +328,6 @@ export default function MLPicks() {
                       Probability{sortIcon("probability")}
                     </th>
                     <th className="px-3 py-2 text-center">Portfolio</th>
-                    <th className="px-3 py-2">Top Features</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -371,30 +370,11 @@ export default function MLPicks() {
                           </span>
                         ) : null}
                       </td>
-                      <td className="px-3 py-2">
-                        <div className="flex flex-wrap gap-1">
-                          {Object.entries(s.contributing_features || {})
-                            .filter(([k]) => k !== "country" && k !== "sector")
-                            .slice(0, 3)
-                            .map(([feat, data]) => {
-                              const d = data as { value: number; importance: number };
-                              return (
-                                <span
-                                  key={feat}
-                                  className="inline-block rounded bg-gray-800 px-1.5 py-0.5 text-xs text-gray-400"
-                                  title={`${feat}: ${d.value} (importance: ${(d.importance * 100).toFixed(1)}%)`}
-                                >
-                                  {feat.replace(/_/g, " ")}
-                                </span>
-                              );
-                            })}
-                        </div>
-                      </td>
                     </tr>
                   ))}
                   {visible.length === 0 && q && (
                     <tr>
-                      <td colSpan={7} className="px-3 py-8 text-center text-gray-500">
+                      <td colSpan={6} className="px-3 py-8 text-center text-gray-500">
                         No matches for &ldquo;{search}&rdquo;
                       </td>
                     </tr>

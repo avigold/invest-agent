@@ -89,7 +89,7 @@ export default function Home() {
           style={{ minHeight: "92vh", paddingTop: "6rem", paddingBottom: "6rem" }}
         >
           <p className="text-brand text-xs font-mono uppercase tracking-widest mb-6 select-none">
-            Automated Investment Research
+            AI-Powered Investment Research
           </p>
 
           <h1
@@ -97,20 +97,21 @@ export default function Home() {
             style={{
               fontSize: "clamp(2.6rem, 7.5vw, 5.5rem)",
               lineHeight: 1.07,
-              maxWidth: "16ch",
+              maxWidth: "18ch",
             }}
           >
-            Research smarter.
+            Find winners
             <br />
-            <span className="text-brand">Decide faster.</span>
+            <span className="text-brand">before the market does.</span>
           </h1>
 
           <p
             className="text-gray-400 leading-relaxed mb-10"
-            style={{ fontSize: "1.125rem", maxWidth: "40ch" }}
+            style={{ fontSize: "1.125rem", maxWidth: "46ch" }}
           >
-            Ingest macro, industry, and company data. Compute deterministic
-            scores with full evidence lineage. Make better investment decisions.
+            770,000+ observations. 16,000+ companies across 24 countries.
+            186 features per stock. Walk-forward backtested and
+            Platt-calibrated. Every prediction evidence-backed.
           </p>
 
           <Link
@@ -135,7 +136,7 @@ export default function Home() {
           </Link>
 
           <p className="text-gray-600 text-xs mt-4 select-none">
-            Score countries, industries, and companies — all in one platform.
+            AI predictions, deterministic scores, and full evidence lineage — one platform.
           </p>
         </div>
 
@@ -150,119 +151,115 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Features */}
+      {/* ML Headline Section */}
       <section
-        className=""
         style={{ background: "#060e1e", borderTop: "1px solid #1a2540" }}
       >
         <div className="max-w-6xl mx-auto px-6 py-24">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-white mb-3">
-              Three layers of analysis
+              Machine learning meets fundamental analysis
             </h2>
-            <p className="text-gray-500 text-base">
-              Macro to micro. Scored and ranked.
+            <p className="text-gray-500 text-base max-w-2xl mx-auto">
+              Two independent scoring systems working together.
+              The ML model learns from 770,000+ historical observations to identify
+              outperformance patterns. The deterministic system provides transparent,
+              evidence-backed fundamental scores.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div
-              className="rounded-2xl border p-7 transition-all duration-200 hover:-translate-y-0.5"
-              style={{
-                background: "#0a1525",
-                borderColor: "#1e2d45",
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.borderColor = "rgba(59,130,246,0.3)";
-                e.currentTarget.style.boxShadow =
-                  "0 0 0 1px rgba(59,130,246,0.06), 0 8px 32px rgba(0,0,0,0.5)";
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.borderColor = "#1e2d45";
-                e.currentTarget.style.boxShadow = "none";
-              }}
-            >
-              <svg width="32" height="32" viewBox="0 0 32 32" fill="none" className="mb-5" style={{ opacity: 0.5 }}>
-                <circle cx="16" cy="16" r="12" stroke="#9ca3af" strokeWidth="1.5" />
-                <ellipse cx="16" cy="16" rx="6" ry="12" stroke="#9ca3af" strokeWidth="1.5" />
-                <line x1="4" y1="16" x2="28" y2="16" stroke="#9ca3af" strokeWidth="1.5" />
-              </svg>
-              <h3 className="text-white font-semibold text-lg mb-3">
-                Country Scoring
-              </h3>
-              <p className="text-gray-500 text-sm leading-relaxed">
-                Comprehensive macro analysis, market performance, and political
-                stability — every major economy scored and ranked automatically.
-              </p>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* ML Card */}
+            <FeatureCard
+              icon={
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ opacity: 0.5 }}>
+                  <path d="M6 26L12 14L18 18L26 6" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <circle cx="12" cy="14" r="2" stroke="#60a5fa" strokeWidth="1.5" />
+                  <circle cx="18" cy="18" r="2" stroke="#60a5fa" strokeWidth="1.5" />
+                  <circle cx="26" cy="6" r="2" stroke="#60a5fa" strokeWidth="1.5" />
+                </svg>
+              }
+              title="ML Predictions"
+              description="Trained on 770,000+ observations spanning 16,000+ companies across 24 countries. 186 features per stock. Walk-forward cross-validation prevents look-ahead bias. Platt-calibrated probabilities with Kelly sizing."
+              stats={[
+                { label: "Observations", value: "770k+" },
+                { label: "Companies", value: "16,000+" },
+                { label: "Features", value: "186" },
+              ]}
+            />
 
-            <div
-              className="rounded-2xl border p-7 transition-all duration-200 hover:-translate-y-0.5"
-              style={{
-                background: "#0a1525",
-                borderColor: "#1e2d45",
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.borderColor = "rgba(59,130,246,0.3)";
-                e.currentTarget.style.boxShadow =
-                  "0 0 0 1px rgba(59,130,246,0.06), 0 8px 32px rgba(0,0,0,0.5)";
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.borderColor = "#1e2d45";
-                e.currentTarget.style.boxShadow = "none";
-              }}
-            >
-              <svg width="32" height="32" viewBox="0 0 32 32" fill="none" className="mb-5" style={{ opacity: 0.5 }}>
-                <rect x="4" y="18" width="5" height="10" rx="1" stroke="#9ca3af" strokeWidth="1.5" />
-                <rect x="13.5" y="10" width="5" height="18" rx="1" stroke="#9ca3af" strokeWidth="1.5" />
-                <rect x="23" y="4" width="5" height="24" rx="1" stroke="#9ca3af" strokeWidth="1.5" />
-              </svg>
-              <h3 className="text-white font-semibold text-lg mb-3">
-                Industry Analysis
-              </h3>
-              <p className="text-gray-500 text-sm leading-relaxed">
-                Every sector evaluated against live macro conditions in each country.
-                Continuously scored so you always know where the tailwinds are.
-              </p>
-            </div>
+            {/* Deterministic Card */}
+            <FeatureCard
+              icon={
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ opacity: 0.5 }}>
+                  <rect x="4" y="4" width="24" height="24" rx="3" stroke="#9ca3af" strokeWidth="1.5" />
+                  <line x1="4" y1="12" x2="28" y2="12" stroke="#9ca3af" strokeWidth="1.5" />
+                  <line x1="14" y1="12" x2="14" y2="28" stroke="#9ca3af" strokeWidth="1.5" />
+                </svg>
+              }
+              title="Deterministic Scores"
+              description="Transparent fundamental and market scoring across 45,000+ scored companies. Every score is reproducible — backed by stored facts, not black-box heuristics. Complete evidence chains."
+              stats={[
+                { label: "Companies scored", value: "45k+" },
+                { label: "Evidence", value: "Full chain" },
+                { label: "Versioned", value: "Always" },
+              ]}
+            />
+          </div>
+        </div>
+      </section>
 
-            <div
-              className="rounded-2xl border p-7 transition-all duration-200 hover:-translate-y-0.5"
-              style={{
-                background: "#0a1525",
-                borderColor: "#1e2d45",
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.borderColor = "rgba(59,130,246,0.3)";
-                e.currentTarget.style.boxShadow =
-                  "0 0 0 1px rgba(59,130,246,0.06), 0 8px 32px rgba(0,0,0,0.5)";
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.borderColor = "#1e2d45";
-                e.currentTarget.style.boxShadow = "none";
-              }}
-            >
-              <svg width="32" height="32" viewBox="0 0 32 32" fill="none" className="mb-5" style={{ opacity: 0.5 }}>
-                <polyline points="4,24 12,14 18,18 28,6" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <circle cx="28" cy="6" r="2.5" stroke="#9ca3af" strokeWidth="1.5" />
-              </svg>
-              <h3 className="text-white font-semibold text-lg mb-3">
-                Company Scoring
-              </h3>
-              <p className="text-gray-500 text-sm leading-relaxed">
-                Deep fundamental analysis and real-time market signals across
-                hundreds of companies. Every score backed by a complete evidence chain.
-              </p>
-            </div>
+      {/* Five Layers */}
+      <section
+        style={{
+          background: "#040a18",
+          borderTop: "1px solid #1a2540",
+        }}
+      >
+        <div className="max-w-6xl mx-auto px-6 py-24">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-white mb-3">
+              Five layers of analysis
+            </h2>
+            <p className="text-gray-500 text-base">
+              Macro to micro. Quantitative and fundamental. All scored and ranked.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <LayerCard
+              step="01"
+              title="Countries"
+              description="GDP, inflation, stability, market performance — 10 investable economies scored."
+            />
+            <LayerCard
+              step="02"
+              title="Industries"
+              description="Every GICS sector evaluated against live macro conditions in each country."
+            />
+            <LayerCard
+              step="03"
+              title="Companies"
+              description="Fundamental ratios, market signals, and composite scores across hundreds of stocks."
+            />
+            <LayerCard
+              step="04"
+              title="ML Signals"
+              description="770,000+ observations powering a 186-feature model that identifies outperformance patterns."
+            />
+            <LayerCard
+              step="05"
+              title="Portfolio"
+              description="Kelly-sized positions with walk-forward backtesting and calibration."
+            />
           </div>
         </div>
       </section>
 
       {/* How it works */}
       <section
-        className=""
         style={{
-          background: "#040a18",
+          background: "#060e1e",
           borderTop: "1px solid #1a2540",
           borderBottom: "1px solid #1a2540",
         }}
@@ -287,10 +284,10 @@ export default function Home() {
               <div className="text-3xl font-bold text-brand mb-4 font-mono">
                 02
               </div>
-              <h3 className="text-white font-semibold mb-2">Run a refresh</h3>
+              <h3 className="text-white font-semibold mb-2">Train a model</h3>
               <p className="text-gray-500 text-sm leading-relaxed">
-                Kick off country, industry, or company jobs. Data is ingested,
-                scored, and packaged automatically.
+                Configure parameters or use the validated golden defaults.
+                Walk-forward CV trains and backtests automatically.
               </p>
             </div>
 
@@ -298,10 +295,10 @@ export default function Home() {
               <div className="text-3xl font-bold text-brand mb-4 font-mono">
                 03
               </div>
-              <h3 className="text-white font-semibold mb-2">Get recommendations</h3>
+              <h3 className="text-white font-semibold mb-2">Get predictions</h3>
               <p className="text-gray-500 text-sm leading-relaxed">
-                Buy, Hold, or Sell — computed from country, industry, and company
-                scores with full transparency.
+                Calibrated probabilities, Kelly-sized portfolios, and
+                deterministic scores — all with full transparency.
               </p>
             </div>
           </div>
@@ -325,10 +322,10 @@ export default function Home() {
           />
           <div className="relative z-10">
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-3">
-              Ready to research smarter?
+              Ready to find your edge?
             </h2>
             <p className="text-gray-500 mb-10 text-base">
-              Deterministic scores. Evidence-backed decisions.
+              AI predictions. Deterministic scores. Full evidence lineage.
             </p>
             <Link
               to="/login"
@@ -360,5 +357,68 @@ export default function Home() {
         }
       `}</style>
     </>
+  );
+}
+
+/* ── Helper components ──────────────────────────────────────────────── */
+
+function FeatureCard({
+  icon,
+  title,
+  description,
+  stats,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  stats: { label: string; value: string }[];
+}) {
+  return (
+    <div
+      className="rounded-2xl border p-7 transition-all duration-200 hover:-translate-y-0.5"
+      style={{ background: "#0a1525", borderColor: "#1e2d45" }}
+      onMouseOver={(e) => {
+        e.currentTarget.style.borderColor = "rgba(59,130,246,0.3)";
+        e.currentTarget.style.boxShadow =
+          "0 0 0 1px rgba(59,130,246,0.06), 0 8px 32px rgba(0,0,0,0.5)";
+      }}
+      onMouseOut={(e) => {
+        e.currentTarget.style.borderColor = "#1e2d45";
+        e.currentTarget.style.boxShadow = "none";
+      }}
+    >
+      <div className="mb-5">{icon}</div>
+      <h3 className="text-white font-semibold text-lg mb-3">{title}</h3>
+      <p className="text-gray-500 text-sm leading-relaxed mb-5">{description}</p>
+      <div className="flex gap-6">
+        {stats.map((s) => (
+          <div key={s.label}>
+            <div className="text-white font-mono font-bold text-sm">{s.value}</div>
+            <div className="text-gray-600 text-xs">{s.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LayerCard({
+  step,
+  title,
+  description,
+}: {
+  step: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div
+      className="rounded-xl border p-5 transition-all duration-200"
+      style={{ background: "#0a1525", borderColor: "#1e2d45" }}
+    >
+      <div className="text-brand font-mono font-bold text-xs mb-2">{step}</div>
+      <h3 className="text-white font-semibold text-sm mb-2">{title}</h3>
+      <p className="text-gray-500 text-xs leading-relaxed">{description}</p>
+    </div>
   );
 }

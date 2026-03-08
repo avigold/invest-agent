@@ -282,7 +282,6 @@ export default function PredictionDetail() {
                 <th className="px-3 py-2">Confidence</th>
                 <th className="px-3 py-2 text-right">Kelly</th>
                 <th className="px-3 py-2 text-right">Weight</th>
-                <th className="px-3 py-2">Top Features</th>
               </tr>
             </thead>
             <tbody>
@@ -315,26 +314,11 @@ export default function PredictionDetail() {
                   <td className="px-3 py-2 text-right font-mono text-gray-400">
                     {s.suggested_weight > 0 ? fmtPct(s.suggested_weight) : "\u2014"}
                   </td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-wrap gap-1">
-                      {Object.entries(s.contributing_features || {})
-                        .slice(0, 3)
-                        .map(([feat, data]) => (
-                          <span
-                            key={feat}
-                            className="inline-block rounded bg-gray-800 px-1.5 py-0.5 text-xs text-gray-400"
-                            title={`${feat}: ${data.value} (importance: ${(data.importance * 100).toFixed(1)}%)`}
-                          >
-                            {feat.replace(/_/g, " ")}
-                          </span>
-                        ))}
-                    </div>
-                  </td>
                 </tr>
               ))}
               {scores.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-600">
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-600">
                     No scores available yet.
                   </td>
                 </tr>
