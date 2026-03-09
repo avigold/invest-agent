@@ -7,6 +7,8 @@ import { useMLModel, useMLModelScores } from "@/lib/queries";
 interface ModelDetail {
   id: string;
   model_version: string;
+  nickname: string | null;
+  is_active: boolean;
   config: Record<string, unknown>;
   fold_metrics: Array<{
     year: number;
@@ -134,7 +136,17 @@ export default function PredictionDetail() {
         <Link to="/predictions" className="text-gray-500 hover:text-white text-sm">
           &larr; Models
         </Link>
-        <h1 className="text-2xl font-bold text-white">{model.model_version}</h1>
+        <h1 className="text-2xl font-bold text-white">
+          {model.nickname || model.model_version}
+        </h1>
+        {model.nickname && (
+          <span className="text-sm text-gray-500">{model.model_version}</span>
+        )}
+        {model.is_active && (
+          <span className="inline-flex items-center rounded-full border border-green-800 bg-green-900/50 px-2 py-0.5 text-xs text-green-400">
+            Active
+          </span>
+        )}
         <span className="text-sm text-gray-500">
           {new Date(model.created_at).toLocaleDateString()}
         </span>

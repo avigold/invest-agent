@@ -22,6 +22,8 @@ interface Score {
 interface ModelSummary {
   id: string;
   model_version: string;
+  nickname: string | null;
+  is_active: boolean;
   aggregate_metrics: { mean_auc?: number };
   created_at: string;
 }
@@ -64,7 +66,7 @@ export default function MLPicks() {
 
   // Dependent queries: models → latest model → scores
   const { data: models = [], error: modelsError, isLoading: modelsLoading } = useMLModels<ModelSummary[]>();
-  const latestModel = models.length > 0 ? models[0] : null;
+  const latestModel = models.find((m) => m.is_active) ?? (models.length > 0 ? models[0] : null);
   const { data: scoresData, isLoading: scoresLoading } = useMLModelScores<{ items: Score[]; total: number }>(
     latestModel?.id || "",
   );

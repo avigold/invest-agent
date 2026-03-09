@@ -4,7 +4,8 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import desc, func, select
+from pydantic import BaseModel as PydanticBaseModel
+from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -20,6 +21,34 @@ from app.score.versions import (
 )
 
 router = APIRouter(prefix="/v1/predictions", tags=["predictions"])
+
+
+class UpdateModelRequest(PydanticBaseModel):
+    nickname: str | None = None
+    is_active: bool | None = None
+
+
+async def _resolve_active_model(
+    db: AsyncSession, user_id: uuid.UUID
+) -> PredictionModel | None:
+    """Return the user's active model, or the most recent one as fallback."""
+    result = await db.execute(
+        select(PredictionModel)
+        .where(PredictionModel.user_id == user_id, PredictionModel.is_active.is_(True))
+        .limit(1)
+    )
+    model = result.scalar_one_or_none()
+    if model is not None:
+        return model
+
+    # Fallback: most recent
+    result = await db.execute(
+        select(PredictionModel)
+        .where(PredictionModel.user_id == user_id)
+        .order_by(desc(PredictionModel.created_at))
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
 
 # Reverse lookup: sector display name → 2-digit GICS code
 _SECTOR_TO_GICS: dict[str, str] = {
@@ -197,6 +226,8 @@ async def list_models(
         {
             "id": str(m.id),
             "model_version": m.model_version,
+            "nickname": m.nickname,
+            "is_active": m.is_active,
             "config": m.config,
             "aggregate_metrics": m.aggregate_metrics,
             "feature_importance": m.feature_importance,
@@ -218,14 +249,8 @@ async def get_latest_model_scores(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get prediction scores for the most recent model."""
-    result = await db.execute(
-        select(PredictionModel)
-        .where(PredictionModel.user_id == user.id)
-        .order_by(desc(PredictionModel.created_at))
-        .limit(1)
-    )
-    model = result.scalar_one_or_none()
+    """Get prediction scores for the active (or most recent) model."""
+    model = await _resolve_active_model(db, user.id)
     if model is None:
         raise HTTPException(status_code=404, detail="No models found")
 
@@ -251,6 +276,8 @@ async def get_latest_model_scores(
     return {
         "model_id": str(model.id),
         "model_version": model.model_version,
+        "nickname": model.nickname,
+        "is_active": model.is_active,
         "created_at": model.created_at.isoformat(),
         "aggregate_metrics": model.aggregate_metrics,
         "total": total,
@@ -278,6 +305,8 @@ async def get_model(
     return {
         "id": str(model.id),
         "model_version": model.model_version,
+        "nickname": model.nickname,
+        "is_active": model.is_active,
         "config": model.config,
         "fold_metrics": model.fold_metrics,
         "aggregate_metrics": model.aggregate_metrics,
@@ -287,6 +316,50 @@ async def get_model(
         "platt_b": model.platt_b,
         "created_at": model.created_at.isoformat(),
         "job_id": str(model.job_id) if model.job_id else None,
+    }
+
+
+@router.patch("/models/{model_id}")
+async def update_model(
+    model_id: uuid.UUID,
+    body: UpdateModelRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a model's nickname and/or active status."""
+    result = await db.execute(
+        select(PredictionModel).where(
+            PredictionModel.id == model_id,
+            PredictionModel.user_id == user.id,
+        )
+    )
+    model = result.scalar_one_or_none()
+    if model is None:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    if body.nickname is not None:
+        model.nickname = body.nickname.strip() or None
+
+    if body.is_active is True:
+        # Deactivate all other models for this user first
+        await db.execute(
+            update(PredictionModel)
+            .where(PredictionModel.user_id == user.id)
+            .values(is_active=False)
+        )
+        model.is_active = True
+    elif body.is_active is False:
+        model.is_active = False
+
+    await db.commit()
+    await db.refresh(model)
+
+    return {
+        "id": str(model.id),
+        "model_version": model.model_version,
+        "nickname": model.nickname,
+        "is_active": model.is_active,
+        "created_at": model.created_at.isoformat(),
     }
 
 
@@ -346,14 +419,8 @@ async def get_score_for_ticker(
     and full composite deterministic scores."""
     ticker = ticker.replace("-", ".").upper()
 
-    # Find latest model for user
-    result = await db.execute(
-        select(PredictionModel)
-        .where(PredictionModel.user_id == user.id)
-        .order_by(desc(PredictionModel.created_at))
-        .limit(1)
-    )
-    model = result.scalar_one_or_none()
+    # Find active (or most recent) model for user
+    model = await _resolve_active_model(db, user.id)
     if model is None:
         raise HTTPException(status_code=404, detail="No models found")
 

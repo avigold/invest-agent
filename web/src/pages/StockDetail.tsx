@@ -147,6 +147,20 @@ const FEATURE_CATEGORIES: FeatureCategory[] = [
   },
 ];
 
+// ── Currency helpers ────────────────────────────────────────────────────
+
+const COUNTRY_CURRENCY_SYMBOL: Record<string, string> = {
+  US: "$", CA: "C$", GB: "£", AU: "A$", NZ: "NZ$",
+  JP: "¥", KR: "₩", BR: "R$", ZA: "R", SG: "S$",
+  HK: "HK$", TW: "NT$", IL: "₪", NO: "kr", SE: "kr",
+  DK: "kr", CH: "CHF ", DE: "€", FR: "€", NL: "€",
+  FI: "€", IE: "€", BE: "€", AT: "€",
+};
+
+function currencySymbol(iso2: string | undefined): string {
+  return COUNTRY_CURRENCY_SYMBOL[iso2 || ""] ?? "$";
+}
+
 // ── Formatting helpers ──────────────────────────────────────────────────
 
 const RATIO_KEYS = new Set([
@@ -191,13 +205,13 @@ function humanise(key: string): string {
   return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function fmtFeatureValue(key: string, value: number): string {
+function fmtFeatureValue(key: string, value: number, sym = "$"): string {
   if (RATIO_KEYS.has(key) || MOMENTUM_KEYS.has(key)) {
     return `${(value * 100).toFixed(1)}%`;
   }
-  if (Math.abs(value) >= 1e9) return `$${(value / 1e9).toFixed(1)}B`;
-  if (Math.abs(value) >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
-  if (Math.abs(value) >= 1e3) return `$${(value / 1e3).toFixed(1)}K`;
+  if (Math.abs(value) >= 1e9) return `${sym}${(value / 1e9).toFixed(1)}B`;
+  if (Math.abs(value) >= 1e6) return `${sym}${(value / 1e6).toFixed(1)}M`;
+  if (Math.abs(value) >= 1e3) return `${sym}${(value / 1e3).toFixed(1)}K`;
   if (Number.isInteger(value)) return value.toLocaleString();
   return value.toFixed(4);
 }
@@ -246,10 +260,10 @@ function rankLabel(rank: number, total: number): string {
   return "Lower tier";
 }
 
-function formatEvidence(series: string, value: number): string {
-  if (series === "equity_close") return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  if (Math.abs(value) >= 1e9) return `$${(value / 1e9).toFixed(1)}B`;
-  if (Math.abs(value) >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
+function formatEvidence(series: string, value: number, sym = "$"): string {
+  if (series === "equity_close") return `${sym}${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  if (Math.abs(value) >= 1e9) return `${sym}${(value / 1e9).toFixed(1)}B`;
+  if (Math.abs(value) >= 1e6) return `${sym}${(value / 1e6).toFixed(1)}M`;
   return value.toFixed(2);
 }
 
@@ -259,10 +273,12 @@ function FeatureSection({
   label,
   features,
   defaultOpen,
+  sym,
 }: {
   label: string;
   features: [string, number][];
   defaultOpen: boolean;
+  sym: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   if (features.length === 0) return null;
@@ -292,7 +308,7 @@ function FeatureSection({
               <div key={key} className="flex items-center justify-between px-4 py-2">
                 <span className="text-sm text-gray-400">{humanise(key)}</span>
                 <span className={`font-mono text-sm ${isNeg ? "text-red-400" : "text-white"}`}>
-                  {fmtFeatureValue(key, val)}
+                  {fmtFeatureValue(key, val, sym)}
                 </span>
               </div>
             );
@@ -348,6 +364,7 @@ export default function StockDetail() {
   // Derive header info from whichever source is available
   const companyName = ml?.company_name || packet?.company_name || ticker;
   const displayTicker = ml?.ticker || packet?.ticker || ticker;
+  const cSym = currencySymbol(packet?.country_iso2 || ml?.country);
   const bothAgree =
     ml && ml.fundamentals?.classification === "Buy" && ml.probability >= 0.5;
 
@@ -474,7 +491,7 @@ export default function StockDetail() {
                         {(d.importance * 100).toFixed(1)}%
                       </span>
                       <span className="w-20 text-right font-mono text-xs text-gray-500">
-                        {fmtFeatureValue(feat, d.value)}
+                        {fmtFeatureValue(feat, d.value, cSym)}
                       </span>
                     </div>
                   ))}
@@ -624,6 +641,7 @@ export default function StockDetail() {
                 label={cat.label}
                 features={cat.features}
                 defaultOpen={cat.defaultOpen}
+                sym={cSym}
               />
             ))}
             {uncategorised.length > 0 && (
@@ -631,6 +649,7 @@ export default function StockDetail() {
                 label="Other"
                 features={uncategorised}
                 defaultOpen={false}
+                sym={cSym}
               />
             )}
           </div>
@@ -661,7 +680,7 @@ export default function StockDetail() {
                 {packet.evidence.map((e, i) => (
                   <tr key={i} className="border-b border-gray-800/50">
                     <td className="px-4 py-2 text-gray-300">{e.series.replace(/_/g, " ")}</td>
-                    <td className="px-4 py-2 text-right font-mono text-white">{formatEvidence(e.series, e.value)}</td>
+                    <td className="px-4 py-2 text-right font-mono text-white">{formatEvidence(e.series, e.value, cSym)}</td>
                     <td className="px-4 py-2 text-gray-400">{e.date}</td>
                     <td className="px-4 py-2 text-gray-500">{e.source}</td>
                     <td className="px-4 py-2 font-mono text-xs text-gray-600">{e.artefact_id.substring(0, 8)}</td>

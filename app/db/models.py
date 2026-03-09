@@ -20,6 +20,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -451,12 +452,20 @@ class PredictionModel(Base):
     __table_args__ = (
         Index("ix_prediction_models_user_id", "user_id"),
         Index("ix_prediction_models_created_at", "created_at"),
+        Index(
+            "ix_prediction_models_user_active",
+            "user_id",
+            unique=True,
+            postgresql_where=text("is_active = true"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     job_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
     model_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    nickname: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     fold_metrics: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     aggregate_metrics: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)

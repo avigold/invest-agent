@@ -54,6 +54,8 @@ interface LatestScores {
 interface ModelSummary {
   id: string;
   model_version: string;
+  nickname: string | null;
+  is_active: boolean;
   aggregate_metrics: {
     mean_auc?: number;
     std_auc?: number;
@@ -340,7 +342,7 @@ export default function Dashboard() {
 
   // New: model stats for hero cards + equity curve
   const { data: allModels = [] } = useMLModels<ModelSummary[]>();
-  const latestModel = allModels.length > 0 ? allModels[0] : null;
+  const latestModel = allModels.find((m: ModelSummary) => m.is_active) ?? (allModels.length > 0 ? allModels[0] : null);
   const { data: modelDetail } = useMLModel<ModelDetail>(latestModel?.id ?? "");
 
   const recentJobs = allJobs.slice(0, 5);

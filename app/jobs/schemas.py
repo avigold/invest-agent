@@ -19,6 +19,7 @@ class JobCommand(str, Enum):
     RECOMMENDATION_ANALYSIS = "recommendation_analysis"
     STOCK_SCREEN = "stock_screen"
     SCREEN_ANALYSIS = "screen_analysis"
+    PREDICTION_TRAIN = "prediction_train"
     ECHO = "echo"  # dummy job for testing
 
 

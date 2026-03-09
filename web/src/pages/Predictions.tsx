@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
-import { useMLModels } from "@/lib/queries";
+import { useMLModels, queryKeys } from "@/lib/queries";
 
 interface ModelSummary {
   id: string;
   model_version: string;
+  nickname: string | null;
+  is_active: boolean;
   config: {
     n_observations?: number;
     n_winners?: number;
@@ -55,9 +58,12 @@ const GOLDEN_COUNTRIES =
 export default function Predictions() {
   const { user, loading } = useUser();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: models = [] } = useMLModels<ModelSummary[]>();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [editingNickname, setEditingNickname] = useState<string | null>(null);
+  const [nicknameValue, setNicknameValue] = useState("");
 
   // Form state — golden model defaults
   const [seed, setSeed] = useState(32);
@@ -75,6 +81,35 @@ export default function Predictions() {
   useEffect(() => {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
+
+  const handleSetActive = async (modelId: string) => {
+    try {
+      await apiJson(`/v1/predictions/models/${modelId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: true }),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mlModels() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mlLatestScores() });
+      queryClient.invalidateQueries({ queryKey: ["mlStock"] });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to set active model");
+    }
+  };
+
+  const handleSaveNickname = async (modelId: string) => {
+    try {
+      await apiJson(`/v1/predictions/models/${modelId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nickname: nicknameValue }),
+      });
+      setEditingNickname(null);
+      queryClient.invalidateQueries({ queryKey: queryKeys.mlModels() });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save nickname");
+    }
+  };
 
   const trainModel = async () => {
     setSubmitting(true);
@@ -335,9 +370,11 @@ export default function Predictions() {
             <thead>
               <tr className="border-b border-gray-800 text-left text-xs uppercase text-gray-500">
                 <th className="px-4 py-3">Model</th>
+                <th className="px-4 py-3">Nickname</th>
+                <th className="px-4 py-3 text-center">Active</th>
                 <th className="px-4 py-3 text-right">AUC</th>
                 <th className="px-4 py-3 text-right">Sharpe</th>
-                <th className="px-4 py-3 text-right">Backtest Return</th>
+                <th className="px-4 py-3 text-right">Return</th>
                 <th className="px-4 py-3 text-right">Hit Rate</th>
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3" />
@@ -360,6 +397,56 @@ export default function Predictions() {
                       {m.config.n_observations ?? 0} obs, {m.config.n_winners ?? 0} winners
                       {m.config.seed != null && ` · seed ${m.config.seed}`}
                     </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {editingNickname === m.id ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={nicknameValue}
+                          onChange={(e) => setNicknameValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveNickname(m.id);
+                            if (e.key === "Escape") setEditingNickname(null);
+                          }}
+                          className="w-28 rounded border border-gray-700 bg-gray-800 px-2 py-1 text-sm text-white focus:border-blue-500 focus:outline-none"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => handleSaveNickname(m.id)}
+                          className="text-xs text-green-400 hover:text-green-300"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setEditingNickname(m.id);
+                          setNicknameValue(m.nickname ?? "");
+                        }}
+                        className="text-sm text-gray-400 hover:text-white"
+                        title="Click to edit"
+                      >
+                        {m.nickname || (
+                          <span className="text-gray-600 italic">Add name</span>
+                        )}
+                      </button>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {m.is_active ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-green-800 bg-green-900/50 px-2 py-0.5 text-xs text-green-400">
+                        Active
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleSetActive(m.id)}
+                        className="text-xs text-gray-600 hover:text-blue-400"
+                      >
+                        Set Active
+                      </button>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right font-mono text-white">
                     {m.aggregate_metrics.mean_auc?.toFixed(3) ?? "\u2014"}
@@ -391,7 +478,7 @@ export default function Predictions() {
               ))}
               {models.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-600">
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-600">
                     No models trained yet. Configure and train your first model above.
                   </td>
                 </tr>

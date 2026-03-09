@@ -276,9 +276,20 @@ async def _fmp_chart_fallback(ticker: str, period: str) -> JSONResponse:
             "change_1d": 0, "change_1d_pct": 0, "prev_close": last["value"],
         }
 
+    # Infer currency from ticker exchange suffix (e.g. .T → JP, .L → GB)
+    _SUFFIX_COUNTRY: dict[str, str] = {
+        ".T": "JP", ".L": "GB", ".TO": "CA", ".AX": "AU", ".NZ": "NZ",
+        ".KS": "KR", ".KQ": "KR", ".SA": "BR", ".JO": "ZA", ".SI": "SG",
+        ".HK": "HK", ".TW": "TW", ".TA": "IL", ".OL": "NO", ".ST": "SE",
+        ".CO": "DK", ".HE": "FI", ".SW": "CH", ".DE": "DE", ".PA": "FR",
+        ".AS": "NL", ".IR": "IE", ".BR": "BE", ".VI": "AT",
+    }
+    suffix = "." + ticker.rsplit(".", 1)[1] if "." in ticker else ""
+    currency = _country_currency(_SUFFIX_COUNTRY.get(suffix))
+
     return JSONResponse(
         content={
-            "ticker": ticker, "currency": "USD", "period": period,
+            "ticker": ticker, "currency": currency, "period": period,
             "points": points_list, "latest": latest,
             "market_status": {"is_open": False, "exchange": "", "next_open": "", "last_close_time": ""},
         },

@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete as sql_delete, select
+from sqlalchemy import delete as sql_delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import PredictionModel, PredictionScore
@@ -270,6 +270,13 @@ async def prediction_train_handler(
     ]
 
     async with session_factory() as db:
+        # Auto-activate if this is the user's first model
+        existing_count = (await db.execute(
+            select(func.count()).select_from(PredictionModel)
+            .where(PredictionModel.user_id == job.user_id)
+        )).scalar() or 0
+        auto_activate = existing_count == 0
+
         pred_model = PredictionModel(
             id=model_id,
             user_id=job.user_id,
@@ -283,9 +290,12 @@ async def prediction_train_handler(
             model_blob=model.serialize(),
             platt_a=model.platt_a,
             platt_b=model.platt_b,
+            is_active=auto_activate,
         )
         db.add(pred_model)
         await db.flush()
+        if auto_activate:
+            _log(job, "Auto-activated as first model for user")
 
         _log(job, f"Model saved: {pred_model.id}")
 
