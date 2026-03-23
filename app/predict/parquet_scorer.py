@@ -23,6 +23,12 @@ from app.predict.parquet_dataset import (
     _EXCLUDE_COLUMNS,
     _CATEGORICAL_COLUMNS,
 )
+from app.predict.listing_quality import (
+    is_likely_adr,
+    is_junior_exchange,
+    normalise_company_name,
+    dollar_volume_usd,
+)
 
 # ── ML portfolio constants ──────────────────────────────────────────────
 # Matches validated backtest: top 50 equal weight (scripts/gen_excel_deduped.py)
@@ -144,13 +150,33 @@ def score_from_parquet(
         log(f"After country filter: {len(df)} rows (dropped {before - len(df)})")
 
     if min_dollar_volume is not None:
+        min_dv = float(min_dollar_volume)
         before = len(df)
-        df = df[
-            df["dollar_volume_30d"].notna()
-            & (df["dollar_volume_30d"] >= float(min_dollar_volume))
-        ].copy()
-        log(f"After min dollar volume >= ${float(min_dollar_volume):,.0f}: "
+        # Convert local-currency dollar volume to approximate USD
+        if "reported_currency" in df.columns:
+            dv_usd = df.apply(
+                lambda r: dollar_volume_usd(r["dollar_volume_30d"], r.get("reported_currency")),
+                axis=1,
+            )
+        else:
+            dv_usd = df["dollar_volume_30d"]
+        df = df[dv_usd.notna() & (dv_usd >= min_dv)].copy()
+        log(f"After min dollar volume >= ${min_dv:,.0f} (USD-adjusted): "
             f"{len(df)} rows (dropped {before - len(df)})")
+
+    # ── Filter ADRs and junior exchange listings ─────────────────────────
+    before = len(df)
+    adr_mask = df["ticker"].apply(is_likely_adr)
+    df = df[~adr_mask].copy()
+    n_adr = before - len(df)
+
+    before = len(df)
+    junior_mask = df["ticker"].apply(is_junior_exchange)
+    df = df[~junior_mask].copy()
+    n_junior = before - len(df)
+
+    if n_adr or n_junior:
+        log(f"Listing quality filter: removed {n_adr} ADR/OTC + {n_junior} junior exchange tickers")
 
     # ── Keep most recent fiscal year per ticker ─────────────────────────
     df = df.sort_values("fiscal_year", ascending=False)
@@ -165,7 +191,7 @@ def score_from_parquet(
     _home_ticker_map: dict[str, str] = {}  # normalized company name → home ticker
     if deduplicate:
         for _, r in df.iterrows():
-            key = str(r.get("company_name", "")).strip().lower()
+            key = normalise_company_name(str(r.get("company_name", "")))
             if not key:
                 continue
             ticker = str(r["ticker"])
@@ -286,7 +312,7 @@ def score_from_parquet(
         deduped: list[ScoredStock] = []
         n_corrected = 0
         for s in scored:
-            key = s.company_name.strip().lower()
+            key = normalise_company_name(s.company_name)
             if key in seen:
                 continue
             seen.add(key)

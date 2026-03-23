@@ -5,6 +5,7 @@ import { useUser } from "@/lib/auth";
 import { useCompanyDetail, useMLStockDetail } from "@/lib/queries";
 import ScoreCard from "@/components/ScoreCard";
 import StockChart from "@/components/StockChart";
+import WatchlistButton from "@/components/WatchlistButton";
 
 // ── Types (deterministic) ─────────────────────────────────────────────
 
@@ -368,6 +369,11 @@ export default function StockDetail() {
   const bothAgree =
     ml && ml.fundamentals?.classification === "Buy" && ml.probability >= 0.5;
 
+  // Detect when all fundamental ratios are null (no data, not a real score)
+  const hasFundamentals = packet?.component_data?.fundamental_ratios
+    ? Object.values(packet.component_data.fundamental_ratios).some((v) => v != null)
+    : false;
+
   // ML feature processing
   const featureEntries = ml ? Object.entries(ml.feature_values || {}) : [];
   const categorised = FEATURE_CATEGORIES.map((cat) => ({
@@ -395,6 +401,7 @@ export default function StockDetail() {
         <div className="flex items-center gap-3">
           <h1 className="text-3xl font-bold text-white">{companyName}</h1>
           <span className="rounded bg-gray-800 px-2 py-1 text-sm text-gray-400">{displayTicker}</span>
+          <WatchlistButton ticker={displayTicker} />
           {ml && ml.suggested_weight > 0 && (
             <span className="rounded-full border border-green-800 bg-green-900/50 px-2 py-0.5 text-xs text-green-300">
               In Portfolio
@@ -438,7 +445,7 @@ export default function StockDetail() {
       </div>
 
       {/* Stock chart */}
-      <StockChart ticker={displayTicker} />
+      <StockChart key={displayTicker} ticker={displayTicker} />
 
       {/* No scoring data available */}
       {!ml && !packet && (
@@ -512,7 +519,15 @@ export default function StockDetail() {
           <h2 className="mb-3 text-lg font-semibold text-white">Fundamentals Score</h2>
           <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-3">
             <ScoreCard label="Overall" score={packet.scores.overall} />
-            <ScoreCard label="Fundamental (60%)" score={packet.scores.fundamental} />
+            {hasFundamentals ? (
+              <ScoreCard label="Fundamental (60%)" score={packet.scores.fundamental} />
+            ) : (
+              <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
+                <div className="text-xs uppercase text-gray-500">Fundamental (60%)</div>
+                <div className="mt-1 text-2xl font-bold text-gray-600">N/A</div>
+                <div className="text-xs text-gray-600">No data</div>
+              </div>
+            )}
             <ScoreCard label="Market (40%)" score={packet.scores.market} />
           </div>
 

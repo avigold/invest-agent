@@ -1,5 +1,17 @@
 """Scoring version constants, weights, and absolute-scoring thresholds."""
 
+import json
+from pathlib import Path
+
+_COUNTRY_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "investable_countries_v1.json"
+
+def _load_allowed_countries() -> list[str]:
+    with open(_COUNTRY_CONFIG_PATH) as f:
+        data = json.load(f)
+    return [c["iso2"] for c in data["countries"]]
+
+ALLOWED_COUNTRIES: list[str] = _load_allowed_countries()
+
 COUNTRY_CALC_VERSION = "country_v2"
 COUNTRY_SUMMARY_VERSION = "country_summary_v2"
 

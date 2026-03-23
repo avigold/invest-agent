@@ -120,8 +120,8 @@ def _classify(
 ) -> str:
     """Compute composite classification from sub-scores."""
     gics = _SECTOR_TO_GICS.get(sector_name, "")
-    cs = (country_scores or {}).get(country_iso2, 50.0)
-    ind = (industry_scores or {}).get((gics, country_iso2), 50.0)
+    cs = (country_scores or {}).get(country_iso2, 10.0)
+    ind = (industry_scores or {}).get((gics, country_iso2), 10.0)
     w = RECOMMENDATION_WEIGHTS
     composite = w["country"] * cs + w["industry"] * ind + w["company"] * company_score
     if composite > RECOMMENDATION_THRESHOLDS["buy"]:
@@ -451,8 +451,8 @@ async def get_score_for_ticker(
     det = score_from_features(score.feature_values or {})
     country_iso2 = score.country or ""
     gics = _SECTOR_TO_GICS.get(score.sector or "", "")
-    cs_val = cs_lookup.get(country_iso2, 50.0)
-    ind_val = ins_lookup.get((gics, country_iso2), 50.0)
+    cs_val = cs_lookup.get(country_iso2, 10.0)
+    ind_val = ins_lookup.get((gics, country_iso2), 10.0)
     w = RECOMMENDATION_WEIGHTS
     composite = round(
         w["country"] * cs_val + w["industry"] * ind_val

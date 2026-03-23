@@ -16,6 +16,11 @@ import numpy as np
 import pyarrow.parquet as pq
 
 from app.predict.dataset import Dataset
+from app.predict.listing_quality import (
+    is_likely_adr,
+    is_junior_exchange,
+    dollar_volume_usd,
+)
 
 
 # Columns that are identifiers / metadata (not features)
@@ -54,6 +59,8 @@ class ParquetDataset(Dataset):
     return_threshold: float | None = None
     max_dd_threshold: float | None = None
     relative_to_country: bool = False
+    allowed_countries: list[str] | None = None
+    min_dollar_volume: float | None = None
 
 
 def compute_recency_weights(
@@ -164,12 +171,31 @@ def load_parquet_dataset(
 
     if min_dollar_volume is not None:
         before = len(df)
-        df = df[
-            df["dollar_volume_30d"].notna()
-            & (df["dollar_volume_30d"] >= min_dollar_volume)
-        ].copy()
-        log(f"After min dollar volume >= ${min_dollar_volume:,.0f}: "
+        # Convert local-currency dollar volume to approximate USD
+        if "reported_currency" in df.columns:
+            dv_usd = df.apply(
+                lambda r: dollar_volume_usd(r["dollar_volume_30d"], r.get("reported_currency")),
+                axis=1,
+            )
+        else:
+            dv_usd = df["dollar_volume_30d"]
+        df = df[dv_usd.notna() & (dv_usd >= min_dollar_volume)].copy()
+        log(f"After min dollar volume >= ${min_dollar_volume:,.0f} (USD-adjusted): "
             f"{len(df)} rows (dropped {before - len(df)})")
+
+    # ── Filter ADRs and junior exchange listings ─────────────────────────
+    before = len(df)
+    adr_mask = df["ticker"].apply(is_likely_adr)
+    df = df[~adr_mask].copy()
+    n_adr = before - len(df)
+
+    before = len(df)
+    junior_mask = df["ticker"].apply(is_junior_exchange)
+    df = df[~junior_mask].copy()
+    n_junior = before - len(df)
+
+    if n_adr or n_junior:
+        log(f"Listing quality filter: removed {n_adr} ADR/OTC + {n_junior} junior exchange tickers")
 
     if max_return_clip is not None:
         clipped = (
@@ -267,4 +293,6 @@ def load_parquet_dataset(
         return_threshold=return_threshold,
         max_dd_threshold=max_dd_threshold,
         relative_to_country=relative_to_country,
+        allowed_countries=allowed_countries,
+        min_dollar_volume=min_dollar_volume,
     )

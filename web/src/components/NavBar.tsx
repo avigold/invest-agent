@@ -16,6 +16,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Research",
     items: [
+      { to: "/watchlist", label: "Watchlist" },
       { to: "/countries", label: "Countries" },
       { to: "/industries", label: "Industries" },
       { to: "/companies", label: "Companies" },

@@ -75,10 +75,11 @@ async def score_current_universe(
     """
     log = log_fn or (lambda _: None)
 
-    # Load companies with scores
+    # Load primary listings with scores (skip duplicate cross-listings)
     result = await db.execute(
         select(Company, CompanyScore)
         .join(CompanyScore, CompanyScore.company_id == Company.id)
+        .where(Company.is_primary_listing == True)  # noqa: E712
     )
     rows = result.all()
     log(f"Loaded {len(rows)} companies with scores")

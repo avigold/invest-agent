@@ -726,6 +726,10 @@ def train_walk_forward_parquet(
         train_config["max_dd_threshold"] = dataset.max_dd_threshold
     if dataset.relative_to_country:
         train_config["relative_to_country"] = True
+    if hasattr(dataset, "allowed_countries") and dataset.allowed_countries:
+        train_config["allowed_countries"] = dataset.allowed_countries
+    if hasattr(dataset, "min_dollar_volume") and dataset.min_dollar_volume is not None:
+        train_config["min_dollar_volume"] = dataset.min_dollar_volume
 
     return TrainedModel(
         booster=final_booster,

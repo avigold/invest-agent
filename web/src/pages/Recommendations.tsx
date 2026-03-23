@@ -7,6 +7,7 @@ import RecommendationTable, {
   RecommendationRow,
 } from "@/components/RecommendationTable";
 import ScoringProfileModal from "@/components/ScoringProfileModal";
+import { exportToCsv, todayStr } from "@/lib/export";
 
 const PAGE_SIZE = 25;
 
@@ -86,6 +87,14 @@ export default function Recommendations() {
     queryClient.invalidateQueries({ queryKey: ["recommendations"] });
   };
 
+  const handleExport = () => {
+    if (!filtered.length) return;
+    exportToCsv(`fundamentals_${todayStr()}.csv`,
+      ["Rank", "Ticker", "Name", "Country", "Sector", "Composite", "Company", "Country Score", "Industry", "Signal"],
+      filtered.map((r) => [r.rank, r.ticker, r.name, r.country_iso2, r.gics_code, r.composite_score, r.company_score, r.country_score, r.industry_score, r.classification]),
+    );
+  };
+
   const handleProfileChange = (profileId: string | null) => {
     if (profileId) {
       setActiveProfileId(profileId);
@@ -143,6 +152,17 @@ export default function Recommendations() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {filtered.length > 0 && (
+            <button
+              onClick={handleExport}
+              title="Export CSV"
+              className="rounded-lg border border-gray-700 bg-gray-800 p-2 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+            </button>
+          )}
           <button
             onClick={handleFlush}
             title="Clear cache and reload"

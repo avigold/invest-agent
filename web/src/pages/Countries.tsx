@@ -6,6 +6,7 @@ import { apiJson } from "@/lib/api";
 import { useCountries, queryKeys } from "@/lib/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import CountryTable, { CountryRow } from "@/components/CountryTable";
+import { exportToCsv, todayStr } from "@/lib/export";
 
 export default function Countries() {
   const { user, loading } = useUser();
@@ -21,6 +22,14 @@ export default function Countries() {
 
   const handleFlush = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.countries() });
+  };
+
+  const handleExport = () => {
+    if (!countries?.length) return;
+    exportToCsv(`countries_${todayStr()}.csv`,
+      ["Rank", "Country", "ISO2", "Overall", "Macro", "Market", "Stability"],
+      countries.map((c) => [c.rank, c.name, c.iso2, c.overall_score, c.macro_score, c.market_score, c.stability_score]),
+    );
   };
 
   const submitRefresh = async () => {
@@ -50,6 +59,17 @@ export default function Countries() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">Countries</h1>
         <div className="flex items-center gap-2">
+          {countries && countries.length > 0 && (
+            <button
+              onClick={handleExport}
+              title="Export CSV"
+              className="rounded-lg border border-gray-700 bg-gray-800 p-2 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+            </button>
+          )}
           <button
             onClick={handleFlush}
             title="Clear cache and reload"

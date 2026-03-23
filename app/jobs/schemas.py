@@ -20,6 +20,12 @@ class JobCommand(str, Enum):
     STOCK_SCREEN = "stock_screen"
     SCREEN_ANALYSIS = "screen_analysis"
     PREDICTION_TRAIN = "prediction_train"
+    PREDICTION_SCORE = "prediction_score"
+    FMP_SYNC = "fmp_sync"
+    PRICE_SYNC = "price_sync"
+    SCORE_SYNC = "score_sync"
+    MACRO_SYNC = "macro_sync"
+    DISCOVER_COMPANIES = "discover_companies"
     ECHO = "echo"  # dummy job for testing
 
 

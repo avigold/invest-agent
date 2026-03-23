@@ -271,6 +271,11 @@ class Company(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     gics_code: Mapped[str] = mapped_column(String(3), nullable=False, default="")
     country_iso2: Mapped[str] = mapped_column(String(2), nullable=False, default="US")
+    is_adr: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    exchange_short: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    isin: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    market_cap_usd: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_primary_listing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     config_version: Mapped[str] = mapped_column(String(50), nullable=False, default="v1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
 
@@ -505,3 +510,27 @@ class PredictionScore(Base):
 
     model: Mapped[PredictionModel] = relationship(back_populates="scores")
     user: Mapped[User] = relationship()
+
+
+class WatchlistItem(Base):
+    __tablename__ = "watchlist_items"
+    __table_args__ = (
+        UniqueConstraint("user_id", "company_id", name="uq_watchlist_user_company"),
+        Index("ix_watchlist_items_user_id", "user_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False
+    )
+    ticker: Mapped[str] = mapped_column(String(20), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    added_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    user: Mapped[User] = relationship()
+    company: Mapped[Company] = relationship()

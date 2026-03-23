@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useUser } from "@/lib/auth";
-import { useMLModels, useMLModelScores, queryKeys } from "@/lib/queries";
+import { useMLModels, useMLModelScores, useBulkAddToWatchlist, queryKeys } from "@/lib/queries";
 import { useQueryClient } from "@tanstack/react-query";
+import { exportToCsv, todayStr } from "@/lib/export";
 
 const PAGE_SIZE = 25;
 
@@ -63,6 +64,8 @@ export default function MLPicks() {
   const [sortKey, setSortKey] = useState<SortKey>("rank");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(1);
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null);
+  const bulkAdd = useBulkAddToWatchlist();
 
   // Dependent queries: models → latest model → scores
   const { data: models = [], error: modelsError, isLoading: modelsLoading } = useMLModels<ModelSummary[]>();
@@ -83,6 +86,38 @@ export default function MLPicks() {
     if (latestModel) {
       queryClient.invalidateQueries({ queryKey: queryKeys.mlModelScores(latestModel.id) });
     }
+  };
+
+  const handleBulkAdd = () => {
+    const portfolioTickers = scores
+      .filter((s) => s.suggested_weight > 0)
+      .map((s) => s.ticker);
+    if (portfolioTickers.length === 0) return;
+    setBulkMsg(null);
+    bulkAdd.mutate(portfolioTickers, {
+      onSuccess: (result) => {
+        if (result.added === 0) {
+          setBulkMsg("All portfolio stocks are already in your watchlist.");
+        } else {
+          const parts = [`Added ${result.added} stock${result.added !== 1 ? "s" : ""}`];
+          if (result.skipped > 0) parts.push(`${result.skipped} already in watchlist`);
+          setBulkMsg(parts.join(", "));
+        }
+        setTimeout(() => setBulkMsg(null), 5000);
+      },
+      onError: (err) => {
+        setBulkMsg(`Error: ${err.message}`);
+        setTimeout(() => setBulkMsg(null), 5000);
+      },
+    });
+  };
+
+  const handleExport = () => {
+    if (!filtered.length) return;
+    exportToCsv(`ml_picks_${todayStr()}.csv`,
+      ["Rank", "Ticker", "Name", "Country", "Sector", "Probability", "Weight"],
+      filtered.map((s) => [s.rank, s.ticker, s.company_name, getCountry(s), getSector(s), s.probability, s.suggested_weight]),
+    );
   };
 
   const getCountry = (s: Score): string => {
@@ -204,16 +239,56 @@ export default function MLPicks() {
             </p>
           )}
         </div>
-        <button
-          onClick={handleFlush}
-          title="Clear cache and reload"
-          className="rounded-lg border border-gray-700 bg-gray-800 p-2 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
-        >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          {withWeights.length > 0 && (
+            <button
+              onClick={handleBulkAdd}
+              disabled={bulkAdd.isPending}
+              title="Add all portfolio stocks to your watchlist"
+              className="flex items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {bulkAdd.isPending ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-600 border-t-gray-300" />
+              ) : (
+                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+              )}
+              Add Portfolio to Watchlist
+            </button>
+          )}
+          {scores.length > 0 && (
+            <button
+              onClick={handleExport}
+              title="Export CSV"
+              className="rounded-lg border border-gray-700 bg-gray-800 p-2 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+            </button>
+          )}
+          <button
+            onClick={handleFlush}
+            title="Clear cache and reload"
+            className="rounded-lg border border-gray-700 bg-gray-800 p-2 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        </div>
       </div>
+
+      {bulkMsg && (
+        <div className={`mb-4 rounded-lg border px-4 py-2 text-sm ${
+          bulkMsg.startsWith("Error")
+            ? "border-red-800 bg-red-950/30 text-red-400"
+            : "border-green-800 bg-green-950/30 text-green-400"
+        }`}>
+          {bulkMsg}
+        </div>
+      )}
 
       {initialLoading ? (
         <div className="rounded-xl border border-gray-800 bg-gray-900/80 p-12 flex items-center justify-center">

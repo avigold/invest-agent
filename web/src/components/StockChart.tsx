@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   createChart,
   AreaSeries,
+  HistogramSeries,
   CrosshairMode,
   type IChartApi,
   type ISeriesApi,
@@ -14,6 +15,7 @@ import type { MarketStatusData } from "./MarketStatus";
 interface ChartPoint {
   date: string;
   value: number;
+  volume?: number;
 }
 
 interface ChartResponse {
@@ -31,6 +33,7 @@ export default function StockChart({ ticker, embedded }: { ticker: string; embed
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Area"> | null>(null);
+  const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const [period, setPeriod] = useState("1y");
   const { data, isLoading: loading } = useChartData<ChartResponse>(ticker, period);
   const [crosshairPrice, setCrosshairPrice] = useState<{
@@ -95,8 +98,19 @@ export default function StockChart({ ticker, embedded }: { ticker: string; embed
       },
     });
 
+    const volumeSeries = chart.addSeries(HistogramSeries, {
+      color: "rgba(59, 130, 246, 0.25)",
+      priceFormat: { type: "volume" },
+      priceScaleId: "volume",
+    });
+    chart.priceScale("volume").applyOptions({
+      scaleMargins: { top: 0.82, bottom: 0 },
+      visible: false,
+    });
+
     chartRef.current = chart;
     seriesRef.current = series;
+    volumeSeriesRef.current = volumeSeries;
 
     // Remove TradingView branding link
     const container = chartContainerRef.current;
@@ -122,6 +136,7 @@ export default function StockChart({ ticker, embedded }: { ticker: string; embed
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
+      volumeSeriesRef.current = null;
     };
   }, []);
 
@@ -156,6 +171,23 @@ export default function StockChart({ ticker, embedded }: { ticker: string; embed
       seriesRef.current.setData(
         data.points.map((p) => ({ time: p.date, value: p.value }))
       );
+
+      if (volumeSeriesRef.current) {
+        const volData = data.points
+          .filter((p) => p.volume != null)
+          .map((p, i, arr) => {
+            const prev = i > 0 ? arr[i - 1].value : p.value;
+            return {
+              time: p.date,
+              value: p.volume!,
+              color: p.value >= prev
+                ? "rgba(34, 197, 94, 0.3)"
+                : "rgba(239, 68, 68, 0.3)",
+            };
+          });
+        volumeSeriesRef.current.setData(volData);
+      }
+
       chartRef.current?.timeScale().fitContent();
     }
   }, [data]);

@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { apiJson } from "@/lib/api";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiJson, apiFetch } from "@/lib/api";
 
 // ── Query keys ──────────────────────────────────────────────────────────
 
@@ -31,6 +31,8 @@ export const queryKeys = {
   dashboardCountries: () => ["dashboardCountries"] as const,
   dashboardCompanies: () => ["dashboardCompanies"] as const,
   dashboardIndustries: () => ["dashboardIndustries"] as const,
+  watchlist: () => ["watchlist"] as const,
+  watchlistCheck: (ticker: string) => ["watchlistCheck", ticker] as const,
 } as const;
 
 // ── Detail hooks (Phase 1) ──────────────────────────────────────────────
@@ -286,6 +288,107 @@ export function useChartData<T = unknown>(ticker: string, period: string) {
         | { market_status?: { is_open?: boolean } }
         | undefined;
       return d?.market_status?.is_open ? 60_000 : false;
+    },
+  });
+}
+
+// ── Watchlist hooks ─────────────────────────────────────────────────────
+
+export interface WatchlistItem {
+  id: string;
+  ticker: string;
+  name: string;
+  country_iso2: string;
+  gics_code: string;
+  position: number;
+  added_at: string;
+  currency: string;
+  overall_score: number | null;
+  composite_score: number | null;
+  fundamental_score: number | null;
+  market_score: number | null;
+  latest_price: number | null;
+  change_1d: number | null;
+  change_1d_pct: number | null;
+  price_date: string | null;
+}
+
+export function useWatchlist() {
+  return useQuery<WatchlistItem[]>({
+    queryKey: queryKeys.watchlist(),
+    queryFn: () => apiJson<WatchlistItem[]>("/v1/watchlist"),
+  });
+}
+
+export function useWatchlistCheck(ticker: string) {
+  return useQuery<{ in_watchlist: boolean }>({
+    queryKey: queryKeys.watchlistCheck(ticker),
+    queryFn: () => apiJson<{ in_watchlist: boolean }>(`/v1/watchlist/check/${ticker}`),
+    enabled: !!ticker,
+  });
+}
+
+export function useAddToWatchlist() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ticker: string) =>
+      apiJson("/v1/watchlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticker }),
+      }),
+    onSuccess: (_data, ticker) => {
+      qc.invalidateQueries({ queryKey: queryKeys.watchlist() });
+      qc.invalidateQueries({ queryKey: queryKeys.watchlistCheck(ticker) });
+    },
+  });
+}
+
+export function useRemoveFromWatchlist() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ticker: string) =>
+      apiFetch(`/v1/watchlist/${ticker}`, { method: "DELETE" }),
+    onSuccess: (_data, ticker) => {
+      qc.invalidateQueries({ queryKey: queryKeys.watchlist() });
+      qc.invalidateQueries({ queryKey: queryKeys.watchlistCheck(ticker) });
+    },
+  });
+}
+
+export function useReorderWatchlist() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (order: string[]) =>
+      apiJson("/v1/watchlist/reorder", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.watchlist() });
+    },
+  });
+}
+
+export interface BulkAddResult {
+  added: number;
+  skipped: number;
+  tickers_added: string[];
+}
+
+export function useBulkAddToWatchlist() {
+  const qc = useQueryClient();
+  return useMutation<BulkAddResult, Error, string[]>({
+    mutationFn: (tickers: string[]) =>
+      apiJson<BulkAddResult>("/v1/watchlist/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tickers }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.watchlist() });
+      qc.invalidateQueries({ queryKey: ["watchlistCheck"] });
     },
   });
 }

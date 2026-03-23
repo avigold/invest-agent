@@ -22,6 +22,7 @@ const ScreenerResult = lazy(() => import("@/pages/ScreenerResult"));
 const Predictions = lazy(() => import("@/pages/Predictions"));
 const PredictionDetail = lazy(() => import("@/pages/PredictionDetail"));
 const MLPicks = lazy(() => import("@/pages/MLPicks"));
+const Watchlist = lazy(() => import("@/pages/Watchlist"));
 
 function RedirectToStock() {
   const { ticker } = useParams<{ ticker: string }>();
@@ -46,6 +47,7 @@ export default function App() {
                   <Route path="/countries/:iso2" element={<CountryDetail />} />
                   <Route path="/fundamentals" element={<Recommendations />} />
                   <Route path="/fundamentals/:ticker" element={<RecommendationDetail />} />
+                  <Route path="/watchlist" element={<Watchlist />} />
                   <Route path="/companies" element={<Companies />} />
                   <Route path="/companies/add" element={<AddCompanies />} />
                   <Route path="/stocks/:ticker" element={<StockDetail />} />

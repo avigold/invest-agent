@@ -6,6 +6,7 @@ import { apiJson } from "@/lib/api";
 import { useIndustries, queryKeys } from "@/lib/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import IndustryTable, { IndustryRow } from "@/components/IndustryTable";
+import { exportToCsv, todayStr } from "@/lib/export";
 
 export default function Industries() {
   const { user, loading } = useUser();
@@ -25,6 +26,14 @@ export default function Industries() {
 
   const handleFlush = () => {
     queryClient.invalidateQueries({ queryKey: ["industries"] });
+  };
+
+  const handleExport = () => {
+    if (!industries?.length) return;
+    exportToCsv(`industries_${todayStr()}.csv`,
+      ["Rank", "Sector", "GICS Code", "Country", "Overall Score"],
+      industries.map((i) => [i.rank, i.industry_name, i.gics_code, i.country_iso2, i.overall_score]),
+    );
   };
 
   const submitRefresh = async () => {
@@ -75,6 +84,17 @@ export default function Industries() {
               </option>
             ))}
           </select>
+          {industries && industries.length > 0 && (
+            <button
+              onClick={handleExport}
+              title="Export CSV"
+              className="rounded-lg border border-gray-700 bg-gray-800 p-2 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+            </button>
+          )}
           <button
             onClick={handleFlush}
             title="Clear cache and reload"

@@ -27,7 +27,6 @@ from app.score.country import (
 from app.score.versions import (
     COMPANY_CALC_VERSION,
     COMPANY_WEIGHTS,
-    COMPANY_WEIGHTS_NO_FUNDAMENTALS,
     FUNDAMENTAL_ABSOLUTE_THRESHOLDS,
     FUNDAMENTAL_INDICATORS,
     MARKET_ABSOLUTE_THRESHOLDS,
@@ -330,15 +329,23 @@ async def compute_company_scores(
 
     # Combine with weights (reweight when fundamentals are missing)
     scores: list[CompanyScore] = []
+    skipped = 0
 
     for company in companies:
         t = company.ticker
+
+        # Detect if this company has no usable fundamental data
+        # Check derived ratios — raw series may exist but yield no computable ratios
+        ratios = derived_ratios.get(t, {})
+        has_fundamentals = any(v is not None for v in ratios.values())
+        if not has_fundamentals:
+            log_fn(f"  {t}: SKIPPED (no fundamental data)")
+            skipped += 1
+            continue
+
         fund = fundamental_subscores.get(t, 50.0)
         mkt = market_subscores.get(t, 50.0)
-
-        # Detect if this company has no fundamental data
-        has_fundamentals = bool(fundamentals.get(t))
-        w = COMPANY_WEIGHTS if has_fundamentals else COMPANY_WEIGHTS_NO_FUNDAMENTALS
+        w = COMPANY_WEIGHTS
 
         overall = fund * w["fundamental"] + mkt * w["market"]
         overall = round(overall, 2)
@@ -364,6 +371,9 @@ async def compute_company_scores(
         scores.append(score)
 
         log_fn(f"  {t}: overall={overall:.1f} (fund={fund:.1f}, mkt={mkt:.1f})")
+
+    if skipped:
+        log_fn(f"Skipped {skipped} companies with no fundamental data")
 
     return scores
 

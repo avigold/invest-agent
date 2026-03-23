@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     fred_api_key: str = ""
     fmp_api_key: str = ""
+    fmp_rate_limit: float = 5.0  # Max FMP API requests per second
     anthropic_api_key: str = ""
     artefact_storage_dir: str = "./data/artefacts"
 

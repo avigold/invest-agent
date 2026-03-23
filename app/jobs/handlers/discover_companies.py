@@ -19,14 +19,15 @@ if TYPE_CHECKING:
     from app.jobs.registry import LiveJob
 
 # Major exchanges to scan — covers ~99% of FMP's actively traded universe.
+# Excluded: OTC, PNK (ADRs/foreign OTC), TSXV/NEO/CNQ (junior/venture),
+# FSX/BER/MUN/STU/HAM/DUS (German regionals — duplicates of XETRA).
 _EXCHANGES = [
     "NYSE", "NASDAQ", "AMEX", "LSE", "TSX", "JPX", "HKSE", "ASX",
     "BSE", "NSE", "SHH", "SHZ", "KSC", "KOE", "SES", "SET", "TAI",
     "TWO", "PAR", "AMS", "MIL", "BME", "XETRA", "SIX", "STO", "OSL",
     "HEL", "CPH", "BRU", "SAO", "JNB", "TLV", "IST", "SAU", "WSE",
     "NZE", "BUD", "ATH", "VIE", "PRA", "JKT", "KLS", "MEX",
-    "TSXV", "NEO", "CNQ", "OTC", "PNK", "LIS", "DUB",
-    "FSX", "BER", "MUN", "STU", "HAM", "DUS",
+    "LIS", "DUB",
     "IOB", "BUE", "KUW", "DFM", "DOH", "SGO", "BVC", "EGX",
     "HOSE", "ICE", "MCX", "RIS", "TAL",
 ]
@@ -107,12 +108,15 @@ async def discover_companies_handler(
                 country_iso2 = item.get("country") or "US"
                 name = item.get("companyName") or ticker
 
+                exchange_short = item.get("exchangeShortName", exchange)
+
                 new_in_exchange.append(Company(
                     ticker=ticker,
                     cik=None,
                     name=name[:200],
                     gics_code=gics,
                     country_iso2=country_iso2,
+                    exchange_short=exchange_short[:20] if exchange_short else None,
                     config_version="fmp_screener",
                 ))
 

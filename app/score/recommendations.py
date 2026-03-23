@@ -51,13 +51,14 @@ async def compute_recommendations(db: AsyncSession) -> list[dict]:
     if latest_date is None:
         return []
 
-    # Load all company scores for the latest date
+    # Load all company scores for the latest date (primary listings only)
     scores_q = (
         select(CompanyScore, Company)
         .join(Company, CompanyScore.company_id == Company.id)
         .where(
             CompanyScore.as_of == latest_date,
             CompanyScore.calc_version == COMPANY_CALC_VERSION,
+            Company.is_primary_listing == True,  # noqa: E712
         )
     )
     result = await db.execute(scores_q)
@@ -108,9 +109,9 @@ async def compute_recommendations(db: AsyncSession) -> list[dict]:
     recommendations = []
 
     for company_score, company in score_rows:
-        cs = country_scores.get(company.country_iso2, 50.0)
+        cs = country_scores.get(company.country_iso2, 10.0)
         is_key = (company.gics_code, company.country_iso2)
-        ind_s = industry_scores.get(is_key, 50.0)
+        ind_s = industry_scores.get(is_key, 10.0)
         comp_s = float(company_score.overall_score)
 
         composite = w["country"] * cs + w["industry"] * ind_s + w["company"] * comp_s

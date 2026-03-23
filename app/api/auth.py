@@ -138,7 +138,7 @@ async def google_callback(
     token = _create_jwt(str(user.id))
     redirect = RedirectResponse(url=f"{settings.app_url}/dashboard", status_code=302)
     redirect.set_cookie(
-        key="access_token",
+        key="ia_token",
         value=token,
         httponly=True,
         samesite="lax",
@@ -150,7 +150,7 @@ async def google_callback(
 
 @router.post("/logout")
 async def logout(response: Response):
-    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("ia_token", path="/")
     return {"ok": True}
 
 

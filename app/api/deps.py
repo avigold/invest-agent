@@ -57,7 +57,7 @@ async def _extract_user(request: Request, db: AsyncSession) -> User | None:
 
 def _get_token(request: Request) -> str | None:
     # Try cookie first, then Authorization header.
-    token = request.cookies.get("access_token")
+    token = request.cookies.get("ia_token")
     if token:
         return token
 

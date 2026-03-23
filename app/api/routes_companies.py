@@ -15,12 +15,22 @@ from app.db.models import (
     CompanyScore,
     CompanySeries,
     CompanySeriesPoint,
+    Country,
+    CountryScore,
     DecisionPacket,
+    Industry,
+    IndustryScore,
     User,
 )
 from app.db.session import get_db
 from app.ingest.fmp import fetch_historical_prices
-from app.score.versions import COMPANY_CALC_VERSION, COMPANY_SUMMARY_VERSION
+from app.score.versions import (
+    COMPANY_CALC_VERSION,
+    COMPANY_SUMMARY_VERSION,
+    COUNTRY_CALC_VERSION,
+    INDUSTRY_CALC_VERSION,
+    RECOMMENDATION_WEIGHTS,
+)
 from app.utils.market_hours import get_market_status
 
 _COUNTRY_CURRENCIES: dict[str, str] = {
@@ -76,59 +86,103 @@ async def list_companies(
     scored_at_result = await db.execute(scored_at_q)
     scored_at = scored_at_result.scalar_one_or_none()
 
+    # Load country scores lookup
+    from sqlalchemy import func as sa_func
+    country_scores: dict[str, float] = {}
+    cs_latest = (
+        select(CountryScore.country_id, sa_func.max(CountryScore.as_of).label("max_as_of"))
+        .where(CountryScore.calc_version == COUNTRY_CALC_VERSION)
+        .group_by(CountryScore.country_id)
+        .subquery()
+    )
+    cs_result = await db.execute(
+        select(Country.iso2, CountryScore.overall_score)
+        .join(CountryScore, CountryScore.country_id == Country.id)
+        .join(cs_latest, (CountryScore.country_id == cs_latest.c.country_id)
+              & (CountryScore.as_of == cs_latest.c.max_as_of))
+        .where(CountryScore.calc_version == COUNTRY_CALC_VERSION)
+    )
+    for iso2, cs_val in cs_result.all():
+        country_scores[iso2] = float(cs_val)
+
+    # Load industry scores lookup
+    industry_scores: dict[tuple[str, str], float] = {}
+    is_latest = (
+        select(IndustryScore.industry_id, IndustryScore.country_id,
+               sa_func.max(IndustryScore.as_of).label("max_as_of"))
+        .where(IndustryScore.calc_version == INDUSTRY_CALC_VERSION)
+        .group_by(IndustryScore.industry_id, IndustryScore.country_id)
+        .subquery()
+    )
+    is_result = await db.execute(
+        select(Industry.gics_code, Country.iso2, IndustryScore.overall_score)
+        .join(IndustryScore, IndustryScore.industry_id == Industry.id)
+        .join(Country, IndustryScore.country_id == Country.id)
+        .join(is_latest, (IndustryScore.industry_id == is_latest.c.industry_id)
+              & (IndustryScore.country_id == is_latest.c.country_id)
+              & (IndustryScore.as_of == is_latest.c.max_as_of))
+        .where(IndustryScore.calc_version == INDUSTRY_CALC_VERSION)
+    )
+    for gics, iso2, is_val in is_result.all():
+        industry_scores[(gics, iso2)] = float(is_val)
+
+    # Load all company scores (no pagination at DB level — we sort by composite)
     base_q = (
         select(CompanyScore, Company)
         .join(Company, CompanyScore.company_id == Company.id)
         .where(
             CompanyScore.as_of == latest_date,
             CompanyScore.calc_version == COMPANY_CALC_VERSION,
+            Company.is_primary_listing == True,  # noqa: E712
         )
     )
     if gics_code:
         base_q = base_q.where(Company.gics_code == gics_code)
     if country_iso2:
         base_q = base_q.where(Company.country_iso2 == country_iso2)
-    base_q = base_q.order_by(desc(CompanyScore.overall_score))
 
-    # Total count (needed when limit is used)
-    if limit is not None:
-        from sqlalchemy import func
-        count_q = select(func.count()).select_from(base_q.subquery())
-        total = (await db.execute(count_q)).scalar() or 0
-    else:
-        total = None  # computed from len(rows) below
-
-    scores_q = base_q
-    if offset:
-        scores_q = scores_q.offset(offset)
-    if limit is not None:
-        scores_q = scores_q.limit(limit)
-
-    result = await db.execute(scores_q)
+    result = await db.execute(base_q)
     rows = result.all()
 
-    if total is None:
-        total = len(rows)
-
-    rank_start = (offset or 0) + 1
-    items = []
-    for i, (score, company) in enumerate(rows):
-        items.append({
+    # Compute composite and sort
+    w = RECOMMENDATION_WEIGHTS
+    all_items = []
+    for score, company in rows:
+        cs = country_scores.get(company.country_iso2, 10.0)
+        ind = industry_scores.get((company.gics_code, company.country_iso2), 10.0)
+        comp = float(score.overall_score)
+        composite = round(w["country"] * cs + w["industry"] * ind + w["company"] * comp, 2)
+        all_items.append({
             "ticker": company.ticker,
             "name": company.name,
             "gics_code": company.gics_code,
             "country_iso2": company.country_iso2,
-            "overall_score": float(score.overall_score),
+            "overall_score": comp,
+            "composite_score": composite,
+            "country_score": cs,
+            "industry_score": ind,
             "fundamental_score": float(score.fundamental_score),
             "market_score": float(score.market_score),
             "industry_context_score": float(score.industry_context_score),
-            "rank": rank_start + i,
-            "rank_total": total,
             "as_of": str(score.as_of),
             "scored_at": scored_at.isoformat() if scored_at else None,
             "calc_version": score.calc_version,
         })
-    return items
+
+    all_items.sort(key=lambda x: x["composite_score"], reverse=True)
+    total = len(all_items)
+    for i, item in enumerate(all_items, 1):
+        item["rank"] = i
+        item["rank_total"] = total
+
+    # Apply pagination
+    start = offset or 0
+    if limit is not None:
+        all_items = all_items[start:start + limit]
+    elif start:
+        all_items = all_items[start:]
+
+    return all_items
 
 
 @router.get("/company/{ticker}/summary")
@@ -253,7 +307,8 @@ async def _fmp_chart_fallback(ticker: str, period: str) -> JSONResponse:
                     client, ticker, api_key, from_date=str(start_date),
                 )
             points_list = [
-                {"date": r["date"], "value": float(r["price"])}
+                {"date": r["date"], "value": float(r["price"]),
+                 **({"volume": int(r["volume"])} if r.get("volume") is not None else {})}
                 for r in rows if r.get("price") is not None
             ]
         except Exception:
@@ -333,7 +388,11 @@ async def company_chart(
             if p["date"] >= start_str:
                 price_val = p.get("price") or p.get("close")
                 if price_val is not None:
-                    points_list.append({"date": p["date"], "value": float(price_val)})
+                    pt: dict = {"date": p["date"], "value": float(price_val)}
+                    vol = p.get("volume")
+                    if vol is not None:
+                        pt["volume"] = int(vol)
+                    points_list.append(pt)
     else:
         # Fallback to legacy CompanySeries/CompanySeriesPoint
         result = await db.execute(
@@ -379,7 +438,7 @@ async def company_chart(
         }
 
     market_status = get_market_status(company.country_iso2)
-    cache_max_age = 30 if market_status["is_open"] else 3600
+    cache_max_age = 30 if market_status["is_open"] else 300
 
     return JSONResponse(
         content={

@@ -42,8 +42,10 @@ async def score_sync_handler(
     start_time = time.monotonic()
 
     async with session_factory() as db:
-        # Load all companies
-        query = select(Company).order_by(Company.ticker)
+        # Load primary listings only (skip duplicate cross-listings)
+        query = select(Company).where(
+            Company.is_primary_listing == True,  # noqa: E712
+        ).order_by(Company.ticker)
         if country_filter:
             query = query.where(Company.country_iso2 == country_filter.upper())
         result = await db.execute(query)

@@ -1266,3 +1266,250 @@ async def _add_companies_async(
         await _preload_fmp_async(concurrency=concurrency, force=False, country_filter=None)
 
     await dispose_engine()
+
+
+@app_cli.command()
+def enrich_companies(
+    batch_size: int = typer.Option(100, help="Batch size for concurrent processing"),
+):
+    """Enrich companies with listing metadata from FMP profiles.
+
+    Fetches is_adr, exchange_short, isin, and market_cap_usd for all
+    companies that haven't been enriched yet (is_adr IS NULL).
+
+    Rate limiting is handled by the shared FMP rate limiter (default 5 req/s).
+    """
+    import asyncio
+    asyncio.run(_enrich_companies_async(batch_size))
+
+
+async def _enrich_companies_async(batch_size: int) -> None:
+    """Async implementation of enrich-companies."""
+    import asyncio
+    import time
+
+    import httpx
+    from sqlalchemy import select
+
+    from app.config import get_settings
+    from app.db.models import Company
+    from app.db.session import _get_session_factory, dispose_engine
+    from app.ingest.fmp import fetch_profile
+
+    settings = get_settings()
+    api_key = settings.fmp_api_key
+    if not api_key:
+        typer.echo("FMP_API_KEY not set. Cannot enrich.")
+        return
+
+    sf = _get_session_factory()
+
+    # Find companies needing enrichment
+    async with sf() as db:
+        result = await db.execute(
+            select(Company).where(Company.is_adr.is_(None)).order_by(Company.ticker)
+        )
+        companies = list(result.scalars().all())
+
+    total = len(companies)
+    if total == 0:
+        typer.echo("All companies already enriched.")
+        await dispose_engine()
+        return
+
+    typer.echo(f"Enriching {total} companies (rate: {settings.fmp_rate_limit} req/s)...")
+
+    enriched = 0
+    failed = 0
+    n_adr = 0
+    t0 = time.monotonic()
+
+    async with httpx.AsyncClient() as client:
+        async def _process(idx: int, ticker: str, company_id) -> None:
+            nonlocal enriched, failed, n_adr
+            try:
+                profile = await fetch_profile(client, ticker, api_key)
+                if not profile:
+                    async with sf() as db:
+                        result = await db.execute(
+                            select(Company).where(Company.id == company_id)
+                        )
+                        c = result.scalars().first()
+                        if c:
+                            c.is_adr = False
+                        await db.commit()
+                    enriched += 1
+                    return
+
+                is_adr = bool(profile.get("isAdr", False))
+                exchange_short = profile.get("exchangeShortName", "")
+                isin = profile.get("isin", "")
+                mkt_cap = profile.get("mktCap")
+
+                async with sf() as db:
+                    result = await db.execute(
+                        select(Company).where(Company.id == company_id)
+                    )
+                    c = result.scalars().first()
+                    if c:
+                        c.is_adr = is_adr
+                        c.exchange_short = exchange_short[:20] if exchange_short else None
+                        c.isin = isin[:12] if isin else None
+                        c.market_cap_usd = int(mkt_cap) if mkt_cap else None
+                    await db.commit()
+
+                enriched += 1
+                if is_adr:
+                    n_adr += 1
+            except Exception as e:
+                failed += 1
+                if failed <= 10:
+                    typer.echo(f"  {ticker}: FAILED ({e})")
+
+        # Process in batches to avoid creating 45k coroutines at once
+        for batch_start in range(0, total, batch_size):
+            batch = companies[batch_start:batch_start + batch_size]
+            tasks = [
+                _process(batch_start + i, c.ticker, c.id)
+                for i, c in enumerate(batch, 1)
+            ]
+            await asyncio.gather(*tasks)
+
+            elapsed = time.monotonic() - t0
+            done = batch_start + len(batch)
+            rate = done / elapsed if elapsed > 0 else 0
+            eta_min = int((total - done) / rate / 60) if rate > 0 else 0
+            typer.echo(
+                f"[{done}/{total}] enriched={enriched} ADRs={n_adr} "
+                f"failed={failed} ({rate:.1f}/s, ETA ~{eta_min}m)"
+            )
+
+    elapsed = time.monotonic() - t0
+    typer.echo(f"\nDone: {enriched} enriched ({n_adr} ADRs), {failed} failed in {elapsed:.0f}s")
+    await dispose_engine()
+
+
+# ── Dedup listings ────────────────────────────────────────────────────
+
+
+@app_cli.command()
+def dedup_listings(
+    dry_run: bool = typer.Option(False, help="Show what would change without modifying the database"),
+):
+    """Mark primary vs secondary listings using ISIN-based deduplication.
+
+    Groups companies by ISIN, selects the best listing per group using
+    a priority scoring algorithm, and sets is_primary_listing accordingly.
+
+    Safe to re-run — idempotent.
+    """
+    import asyncio
+    asyncio.run(_dedup_listings_async(dry_run))
+
+
+async def _dedup_listings_async(dry_run: bool) -> None:
+    from collections import defaultdict
+
+    from sqlalchemy import select, func
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.db.models import Company, CompanyScore
+    from app.db.session import _get_session_factory, dispose_engine
+    from app.dedup.listing_priority import listing_priority
+
+    sf = _get_session_factory()
+
+    async with sf() as db:
+        # Load all companies
+        result = await db.execute(select(Company).order_by(Company.ticker))
+        companies = list(result.scalars().all())
+        typer.echo(f"Loaded {len(companies)} companies")
+
+        # Load latest fundamental scores for has_fundamentals detection
+        rn = func.row_number().over(
+            partition_by=CompanyScore.company_id,
+            order_by=CompanyScore.as_of.desc(),
+        ).label("rn")
+        subq = select(
+            CompanyScore.company_id,
+            CompanyScore.fundamental_score,
+            rn,
+        ).subquery()
+        q = select(subq.c.company_id, subq.c.fundamental_score).where(subq.c.rn == 1)
+        fund_rows = await db.execute(q)
+        fund_scores = {row[0]: float(row[1]) for row in fund_rows.all()}
+        typer.echo(f"Loaded {len(fund_scores)} fundamental scores")
+
+        # Group by ISIN
+        isin_groups: dict[str, list[Company]] = defaultdict(list)
+        no_isin: list[Company] = []
+        for c in companies:
+            if c.isin:
+                isin_groups[c.isin].append(c)
+            else:
+                no_isin.append(c)
+
+        typer.echo(f"ISIN groups: {len(isin_groups)}, without ISIN: {len(no_isin)}")
+
+        primary_count = 0
+        secondary_count = 0
+        changed_count = 0
+
+        for isin, group in isin_groups.items():
+            if len(group) == 1:
+                if not group[0].is_primary_listing:
+                    group[0].is_primary_listing = True
+                    changed_count += 1
+                primary_count += 1
+                continue
+
+            # Score each listing in the group
+            scored = []
+            for c in group:
+                has_fund = fund_scores.get(c.id, 50.0) != 50.0
+                priority = listing_priority(
+                    ticker=c.ticker,
+                    country_iso2=c.country_iso2,
+                    is_adr=c.is_adr,
+                    exchange_short=c.exchange_short,
+                    has_fundamentals=has_fund,
+                    market_cap_usd=c.market_cap_usd,
+                )
+                scored.append((priority, c))
+
+            # Winner = max priority
+            scored.sort(key=lambda x: x[0], reverse=True)
+            winner = scored[0][1]
+
+            for _, c in scored:
+                new_val = (c.id == winner.id)
+                if c.is_primary_listing != new_val:
+                    changed_count += 1
+                    if not dry_run:
+                        c.is_primary_listing = new_val
+                if new_val:
+                    primary_count += 1
+                else:
+                    secondary_count += 1
+
+        # No-ISIN companies always primary
+        for c in no_isin:
+            if not c.is_primary_listing:
+                c.is_primary_listing = True
+                changed_count += 1
+            primary_count += 1
+
+        if not dry_run:
+            await db.commit()
+
+        typer.echo(f"\nDedup results:")
+        typer.echo(f"  Total companies:     {len(companies)}")
+        typer.echo(f"  Unique ISINs:        {len(isin_groups)}")
+        typer.echo(f"  Without ISIN:        {len(no_isin)}")
+        typer.echo(f"  Primary listings:    {primary_count}")
+        typer.echo(f"  Secondary listings:  {secondary_count}")
+        typer.echo(f"  Changes:             {changed_count}")
+        if dry_run:
+            typer.echo("  (DRY RUN — no changes applied)")
+
+    await dispose_engine()

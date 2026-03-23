@@ -240,11 +240,16 @@ async def export_training_dataset(
 
     start_time = time.monotonic()
 
-    # Load companies
+    # Load companies (exclude ADRs and OTC/junior exchange listings)
     async with session_factory() as db:
         query = select(Company).order_by(Company.ticker)
         if countries:
             query = query.where(Company.country_iso2.in_([c.upper() for c in countries]))
+        # NOTE: No listing quality filters here (no is_primary_listing,
+        # is_adr, or exchange exclusions). Including all listings — even
+        # ADRs and OTC — gives the model more training signal for popular
+        # companies. The ML scorer handles dedup + listing quality at
+        # scoring time.
         result = await db.execute(query)
         companies = list(result.scalars().all())
 
