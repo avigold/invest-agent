@@ -17,6 +17,8 @@ from app.db.models import (
     CompanySeriesPoint,
     Country,
     CountryScore,
+    CountrySeries,
+    CountrySeriesPoint,
     DecisionPacket,
     Industry,
     IndustryScore,
@@ -47,6 +49,18 @@ _COUNTRY_CURRENCIES: dict[str, str] = {
 def _country_currency(iso2: str | None) -> str:
     return _COUNTRY_CURRENCIES.get(iso2 or "", "USD")
 
+
+def _load_index_names() -> dict[str, str]:
+    """Return {iso2: equity_index_name} from config."""
+    import json
+    from pathlib import Path
+    cfg = Path(__file__).resolve().parents[2] / "config" / "investable_countries_v1.json"
+    with open(cfg) as f:
+        data = json.load(f)
+    return {c["iso2"]: c["equity_index_name"] for c in data["countries"]}
+
+
+_INDEX_NAMES: dict[str, str] = _load_index_names()
 
 router = APIRouter(prefix="/v1", tags=["companies"])
 
@@ -356,6 +370,7 @@ async def _fmp_chart_fallback(ticker: str, period: str) -> JSONResponse:
 async def company_chart(
     ticker: str,
     period: str = Query("1y", description="Time period: 1w, 1m, 3m, 6m, 1y, 5y"),
+    benchmark: str | None = Query(None, description="Benchmark type: 'index' for country equity index"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -413,6 +428,57 @@ async def company_chart(
             )
             points_list = [{"date": str(p.date), "value": float(p.value)} for p in result.scalars().all()]
 
+    # ── Benchmark data (optional) ─────────────────────────────────────
+    benchmark_data = None
+    if benchmark == "index" and points_list:
+        country_result = await db.execute(
+            select(Country).where(Country.iso2 == company.country_iso2)
+        )
+        country_row = country_result.scalar_one_or_none()
+        if country_row:
+            cs_result = await db.execute(
+                select(CountrySeries).where(
+                    CountrySeries.country_id == country_row.id,
+                    CountrySeries.series_name == "equity_close",
+                )
+            )
+            idx_series = cs_result.scalar_one_or_none()
+            if idx_series:
+                idx_result = await db.execute(
+                    select(CountrySeriesPoint)
+                    .where(
+                        CountrySeriesPoint.series_id == idx_series.id,
+                        CountrySeriesPoint.date >= start_date,
+                    )
+                    .order_by(CountrySeriesPoint.date.asc())
+                )
+                idx_map = {str(p.date): float(p.value) for p in idx_result.scalars().all()}
+
+                if idx_map:
+                    stock_dates = {p["date"] for p in points_list}
+                    overlap = sorted(stock_dates & set(idx_map.keys()))
+
+                    if overlap:
+                        first = overlap[0]
+                        stock_base = next(p["value"] for p in points_list if p["date"] == first)
+                        idx_base = idx_map[first]
+
+                        norm_stock = [
+                            {"date": p["date"], "value": round(((p["value"] - stock_base) / stock_base) * 100, 4)}
+                            for p in points_list if p["date"] >= first and stock_base
+                        ]
+                        norm_idx = [
+                            {"date": d, "value": round(((idx_map[d] - idx_base) / idx_base) * 100, 4)}
+                            for d in sorted(idx_map.keys()) if d >= first and idx_base
+                        ]
+                        benchmark_data = {
+                            "name": _INDEX_NAMES.get(company.country_iso2, country_row.equity_index_symbol),
+                            "symbol": country_row.equity_index_symbol,
+                            "country_iso2": company.country_iso2,
+                            "points": norm_idx,
+                            "stock_normalised": norm_stock,
+                        }
+
     # Compute latest change
     latest = None
     if len(points_list) >= 2:
@@ -440,14 +506,18 @@ async def company_chart(
     market_status = get_market_status(company.country_iso2)
     cache_max_age = 30 if market_status["is_open"] else 300
 
+    content: dict = {
+        "ticker": company.ticker,
+        "currency": _country_currency(company.country_iso2),
+        "period": period,
+        "points": points_list,
+        "latest": latest,
+        "market_status": market_status,
+    }
+    if benchmark_data is not None:
+        content["benchmark"] = benchmark_data
+
     return JSONResponse(
-        content={
-            "ticker": company.ticker,
-            "currency": _country_currency(company.country_iso2),
-            "period": period,
-            "points": points_list,
-            "latest": latest,
-            "market_status": market_status,
-        },
+        content=content,
         headers={"Cache-Control": f"private, max-age={cache_max_age}"},
     )

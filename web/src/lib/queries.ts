@@ -21,7 +21,7 @@ export const queryKeys = {
   job: (id: string) => ["job", id] as const,
   screenerResults: () => ["screenerResults"] as const,
   screenerResult: (id: string) => ["screenerResult", id] as const,
-  chart: (ticker: string, period: string) => ["chart", ticker, period] as const,
+  chart: (ticker: string, period: string, benchmark?: string) => ["chart", ticker, period, benchmark ?? null] as const,
   scoringProfiles: () => ["scoringProfiles"] as const,
   scoringDefaults: () => ["scoringDefaults"] as const,
   adminStats: () => ["admin", "stats"] as const,
@@ -274,13 +274,16 @@ export function useScreenerResultDetail<T = unknown>(id: string) {
   });
 }
 
-export function useChartData<T = unknown>(ticker: string, period: string) {
+export function useChartData<T = unknown>(ticker: string, period: string, benchmark?: string) {
   return useQuery<T>({
-    queryKey: queryKeys.chart(ticker, period),
-    queryFn: () =>
-      apiJson<T>(
-        `/v1/company/${ticker.replace(/\./g, "-")}/chart?period=${period}`,
-      ),
+    queryKey: queryKeys.chart(ticker, period, benchmark),
+    queryFn: () => {
+      const params = new URLSearchParams({ period });
+      if (benchmark) params.set("benchmark", benchmark);
+      return apiJson<T>(
+        `/v1/company/${ticker.replace(/\./g, "-")}/chart?${params.toString()}`,
+      );
+    },
     enabled: !!ticker,
     staleTime: 60_000,
     refetchInterval: (query) => {

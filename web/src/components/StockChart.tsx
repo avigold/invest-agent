@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   createChart,
   AreaSeries,
+  LineSeries,
   HistogramSeries,
   CrosshairMode,
   type IChartApi,
@@ -18,6 +19,14 @@ interface ChartPoint {
   volume?: number;
 }
 
+interface BenchmarkData {
+  name: string;
+  symbol: string;
+  country_iso2: string;
+  points: { date: string; value: number }[];
+  stock_normalised: { date: string; value: number }[];
+}
+
 interface ChartResponse {
   ticker: string;
   currency: string;
@@ -25,18 +34,40 @@ interface ChartResponse {
   points: ChartPoint[];
   latest: LatestPrice | null;
   market_status: MarketStatusData;
+  benchmark?: BenchmarkData;
 }
 
 const PERIODS = ["1W", "1M", "3M", "6M", "1Y", "5Y"] as const;
+
+const PCT_FORMAT = {
+  type: "custom" as const,
+  formatter: (price: number) => `${price >= 0 ? "+" : ""}${price.toFixed(1)}%`,
+};
+
+const PRICE_FORMAT = {
+  type: "price" as const,
+  precision: 2,
+  minMove: 0.01,
+};
 
 export default function StockChart({ ticker, embedded }: { ticker: string; embedded?: boolean }) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Area"> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
+  const benchmarkSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const [period, setPeriod] = useState("1y");
-  const { data, isLoading: loading } = useChartData<ChartResponse>(ticker, period);
+  const [showBenchmark, setShowBenchmark] = useState(false);
+  const { data, isLoading: loading } = useChartData<ChartResponse>(
+    ticker,
+    period,
+    showBenchmark ? "index" : undefined,
+  );
   const [crosshairPrice, setCrosshairPrice] = useState<{
+    date: string;
+    value: number;
+  } | null>(null);
+  const [crosshairBenchmark, setCrosshairBenchmark] = useState<{
     date: string;
     value: number;
   } | null>(null);
@@ -91,11 +122,7 @@ export default function StockChart({ ticker, embedded }: { ticker: string; embed
       crosshairMarkerRadius: 4,
       crosshairMarkerBorderColor: "#3b82f6",
       crosshairMarkerBackgroundColor: "#1e3a5f",
-      priceFormat: {
-        type: "price",
-        precision: 2,
-        minMove: 0.01,
-      },
+      priceFormat: PRICE_FORMAT,
     });
 
     const volumeSeries = chart.addSeries(HistogramSeries, {
@@ -108,9 +135,21 @@ export default function StockChart({ ticker, embedded }: { ticker: string; embed
       visible: false,
     });
 
+    const benchmarkSeries = chart.addSeries(LineSeries, {
+      color: "#f59e0b",
+      lineWidth: 2,
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 3,
+      crosshairMarkerBorderColor: "#f59e0b",
+      crosshairMarkerBackgroundColor: "#78350f",
+      priceFormat: PCT_FORMAT,
+      visible: false,
+    });
+
     chartRef.current = chart;
     seriesRef.current = series;
     volumeSeriesRef.current = volumeSeries;
+    benchmarkSeriesRef.current = benchmarkSeries;
 
     // Remove TradingView branding link
     const container = chartContainerRef.current;
@@ -121,6 +160,7 @@ export default function StockChart({ ticker, embedded }: { ticker: string; embed
     chart.subscribeCrosshairMove((param: MouseEventParams) => {
       if (!param.time || !param.point) {
         setCrosshairPrice(null);
+        setCrosshairBenchmark(null);
         return;
       }
       const seriesData = param.seriesData.get(series);
@@ -130,6 +170,15 @@ export default function StockChart({ ticker, embedded }: { ticker: string; embed
           value: (seriesData as { value: number }).value,
         });
       }
+      const bmData = param.seriesData.get(benchmarkSeries);
+      if (bmData && "value" in bmData) {
+        setCrosshairBenchmark({
+          date: String(param.time),
+          value: (bmData as { value: number }).value,
+        });
+      } else {
+        setCrosshairBenchmark(null);
+      }
     });
 
     return () => {
@@ -137,6 +186,7 @@ export default function StockChart({ ticker, embedded }: { ticker: string; embed
       chartRef.current = null;
       seriesRef.current = null;
       volumeSeriesRef.current = null;
+      benchmarkSeriesRef.current = null;
     };
   }, []);
 
@@ -167,12 +217,54 @@ export default function StockChart({ ticker, embedded }: { ticker: string; embed
 
   // Sync query data to chart
   useEffect(() => {
-    if (data && seriesRef.current && data.points.length > 0) {
+    if (!data || !seriesRef.current) return;
+
+    const hasBenchmark = showBenchmark && data.benchmark;
+
+    if (hasBenchmark) {
+      // Benchmark mode: normalised percentage values
+      seriesRef.current.applyOptions({
+        priceFormat: PCT_FORMAT,
+        topColor: "rgba(59, 130, 246, 0.15)",
+        bottomColor: "rgba(59, 130, 246, 0.0)",
+      });
       seriesRef.current.setData(
-        data.points.map((p) => ({ time: p.date, value: p.value }))
+        data.benchmark!.stock_normalised.map((p) => ({ time: p.date, value: p.value }))
       );
 
+      if (benchmarkSeriesRef.current) {
+        benchmarkSeriesRef.current.setData(
+          data.benchmark!.points.map((p) => ({ time: p.date, value: p.value }))
+        );
+        benchmarkSeriesRef.current.applyOptions({ visible: true });
+      }
+
+      // Hide volume in benchmark mode
       if (volumeSeriesRef.current) {
+        volumeSeriesRef.current.setData([]);
+      }
+    } else {
+      // Normal mode: absolute prices
+      seriesRef.current.applyOptions({
+        priceFormat: PRICE_FORMAT,
+        topColor: "rgba(59, 130, 246, 0.4)",
+        bottomColor: "rgba(59, 130, 246, 0.0)",
+      });
+
+      if (data.points.length > 0) {
+        seriesRef.current.setData(
+          data.points.map((p) => ({ time: p.date, value: p.value }))
+        );
+      }
+
+      // Hide benchmark line
+      if (benchmarkSeriesRef.current) {
+        benchmarkSeriesRef.current.setData([]);
+        benchmarkSeriesRef.current.applyOptions({ visible: false });
+      }
+
+      // Restore volume
+      if (volumeSeriesRef.current && data.points.length > 0) {
         const volData = data.points
           .filter((p) => p.volume != null)
           .map((p, i, arr) => {
@@ -187,10 +279,12 @@ export default function StockChart({ ticker, embedded }: { ticker: string; embed
           });
         volumeSeriesRef.current.setData(volData);
       }
-
-      chartRef.current?.timeScale().fitContent();
     }
-  }, [data]);
+
+    chartRef.current?.timeScale().fitContent();
+  }, [data, showBenchmark]);
+
+  const benchmarkActive = showBenchmark && data?.benchmark;
 
   return (
     <div className={embedded ? "px-5 pt-3 pb-3" : "rounded-xl border border-gray-800 bg-gray-900 p-5 mb-8"}>
@@ -199,12 +293,36 @@ export default function StockChart({ ticker, embedded }: { ticker: string; embed
         <PriceHeader
           latest={data.latest}
           marketStatus={data.market_status}
-          crosshairPrice={crosshairPrice}
+          crosshairPrice={benchmarkActive ? null : crosshairPrice}
           currency={data.currency}
         />
       )}
 
-      {/* Period selector */}
+      {/* Benchmark legend */}
+      {benchmarkActive && (
+        <div className="flex items-center gap-4 mb-2 text-xs">
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block h-0.5 w-4 rounded bg-blue-500" />
+            <span className="text-gray-400">{ticker}</span>
+            {crosshairPrice != null && (
+              <span className={`font-mono ${crosshairPrice.value >= 0 ? "text-green-400" : "text-red-400"}`}>
+                {crosshairPrice.value >= 0 ? "+" : ""}{crosshairPrice.value.toFixed(1)}%
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block h-0.5 w-4 rounded bg-amber-500" />
+            <span className="text-gray-400">{data!.benchmark!.name}</span>
+            {crosshairBenchmark != null && (
+              <span className={`font-mono ${crosshairBenchmark.value >= 0 ? "text-green-400" : "text-red-400"}`}>
+                {crosshairBenchmark.value >= 0 ? "+" : ""}{crosshairBenchmark.value.toFixed(1)}%
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Period selector + benchmark toggle */}
       <div className="flex items-center gap-1 mb-3">
         {PERIODS.map((p) => (
           <button
@@ -219,6 +337,26 @@ export default function StockChart({ ticker, embedded }: { ticker: string; embed
             {p}
           </button>
         ))}
+
+        <div className="flex-1" />
+
+        {!embedded && (
+          <button
+            onClick={() => setShowBenchmark(!showBenchmark)}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5 ${
+              showBenchmark
+                ? "bg-amber-600/20 text-amber-400 border border-amber-700"
+                : "bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700"
+            }`}
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 13h2l3-8 4 14 3-6h6" />
+            </svg>
+            {benchmarkActive
+              ? `vs ${data!.benchmark!.name}`
+              : "vs Index"}
+          </button>
+        )}
       </div>
 
       {/* Chart */}
