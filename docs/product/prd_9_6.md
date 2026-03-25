@@ -1,5 +1,6 @@
 # PRD 9.6 — Unified Stock Detail Page
 
+**Status**: Complete
 ## Problem
 
 Three separate detail pages exist for the same stock:

@@ -1,5 +1,6 @@
 # PRD 7.8 — Score Universe + Portfolio Construction + Multi-Tier Nav
 
+**Status**: Complete
 ## Problem
 
 The relative outperformance model (PRD 7.7) is trained and validated — mean AUC 0.5989, monotonic decile returns, avg +85%/yr on top 50 in backtest. But it only exists as a trained blob in the database with no stocks scored. The existing scoring pipeline (`scorer.py`, `strategy.py`) serves the deterministic recommendation system and must not be modified. The ML pipeline needs its own standalone infrastructure.

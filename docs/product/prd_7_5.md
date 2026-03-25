@@ -1,5 +1,6 @@
 # PRD 7.5 — ML Model Training Pipeline
 
+**Status**: Complete
 ## Problem
 
 We have a comprehensive training dataset (PRD 7.4): 771,394 rows × 199 columns covering 43,291 companies across 100 countries and 44 fiscal years. The dataset includes ~140 raw FMP financial fields, ~40 derived ratios, ~25 price features, forward return labels, and context features. Class distribution: 8.6% "winner" (12m return ≥ 100%), 85.8% "normal".

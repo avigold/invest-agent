@@ -1,5 +1,6 @@
 # PRD 9.5 — Migrate to TanStack Query
 
+**Status**: Complete
 ## Problem Statement
 
 All 17 data-fetching pages use manual `useState` + `useEffect` + `apiJson` patterns. React 18's StrictMode double-fires effects in development, causing duplicate API calls on every page load (confirmed via network inspection). The manual sessionStorage cache (`lib/cache.ts`) adds complexity with `flushKey`, `fetchId`, `firstPage`/`allScores` two-phase loading, and `readCache`/`writeCache` boilerplate across 5 pages.

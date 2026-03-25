@@ -1,5 +1,6 @@
 # PRD 7.6 — Risk-Adjusted Winner Label
 
+**Status**: Complete
 ## Problem
 
 The PRD 7.5 model (LightGBM, walk-forward CV) predicts "winners" defined as stocks with 100%+ 12-month returns. Holdout analysis on 2024 data reveals the model is a "lottery ticket picker":

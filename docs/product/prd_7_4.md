@@ -1,5 +1,6 @@
 # PRD 7.4 — Comprehensive ML Training Dataset Exporter
 
+**Status**: Complete
 ## Problem
 
 We have 45,698 companies with FMP fundamentals and JSONB price history (~173M daily data points). FMP artefacts stored on disk contain 140 financial fields per company per year, but we currently extract only 9 into `company_series_points`. The existing `app/predict/` module uses only 22 features. To discover micro-advantages for predictive models, we need to export everything available.

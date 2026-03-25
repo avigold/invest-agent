@@ -1,5 +1,6 @@
 # PRD 7.7 — Relative Outperformance Target
 
+**Status**: Complete
 ## Problem
 
 Two previous ML target definitions failed to produce practical stock selection:

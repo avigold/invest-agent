@@ -1,5 +1,6 @@
 # PRD 7.9 — ML-First Platform Rework
 
+**Status**: Complete
 ## Problem
 
 The ML relative outperformance model (PRD 7.7-7.8) averages 84.5%/year across 7 backtested years (2018-2024) with company deduplication, seed 32. Even the worst seed across 100 trials averages +52%/year. This massively outperforms the composite scoring system. The platform should center on the ML approach as the primary signal.

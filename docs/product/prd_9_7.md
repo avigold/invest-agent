@@ -1,5 +1,6 @@
 # PRD 9.7 — Make Train Model Feature Use ML/Parquet System
 
+**Status**: Complete
 ## Problem
 
 The Predictions page train form uses the **deterministic scoring system** (22 features, ~136 companies from the DB). It should use the **ML/Parquet system** (186 features, ~771k rows from Parquet export) which produced the validated 84.5% backtest. The form exposes 4 irrelevant parameters; defaults should match the golden model config (seed 32).

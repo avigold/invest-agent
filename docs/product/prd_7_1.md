@@ -1,5 +1,6 @@
 # PRD 7.1 — FMP Fundamentals Integration
 
+**Status**: Complete
 ## Problem
 
 The prediction model (PRD 7.0) trains on ~1,600 observations spanning 20 years, but yfinance only provides ~4 years of fundamental data. This means ~60-80% of training observations lack fundamental features (ROE, net margin, debt/equity, FCF yield). LightGBM handles the NaNs but the model can't learn fundamental-based patterns from data it doesn't have.
