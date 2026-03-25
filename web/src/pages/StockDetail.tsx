@@ -5,6 +5,7 @@ import { useUser } from "@/lib/auth";
 import { useCompanyDetail, useMLStockDetail } from "@/lib/queries";
 import ScoreCard from "@/components/ScoreCard";
 import StockChart from "@/components/StockChart";
+import KeyRatios from "@/components/KeyRatios";
 import WatchlistButton from "@/components/WatchlistButton";
 
 // ── Types (deterministic) ─────────────────────────────────────────────
@@ -74,6 +75,8 @@ interface MLScoreDetail {
   model_id: string;
   model_version: string;
   fundamentals: Fundamentals | null;
+  key_ratios?: Record<string, number | null>;
+  market_cap_usd?: number | null;
 }
 
 // ── Feature categories ──────────────────────────────────────────────────
@@ -446,6 +449,14 @@ export default function StockDetail() {
 
       {/* Stock chart */}
       <StockChart key={displayTicker} ticker={displayTicker} />
+
+      {/* Key ratios dashboard */}
+      {ml?.key_ratios && (
+        <KeyRatios ratios={ml.key_ratios} marketCap={ml.market_cap_usd} />
+      )}
+      {!ml?.key_ratios && packet?.component_data?.fundamental_ratios && (
+        <KeyRatios ratios={packet.component_data.fundamental_ratios} />
+      )}
 
       {/* No scoring data available */}
       {!ml && !packet && (

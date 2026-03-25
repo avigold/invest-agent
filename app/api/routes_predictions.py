@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.db.models import (
+    Company, CompanyPriceHistory,
     Country, CountryScore, Industry, IndustryScore,
     PredictionModel, PredictionScore, User,
 )
@@ -468,6 +469,62 @@ async def get_score_for_ticker(
         "country_score": cs_val,
         "industry_score": ind_val,
     }
+
+    # ── Key ratios (pre-computed for the frontend dashboard) ──────
+    fv = score.feature_values or {}
+
+    # Get latest price for P/E and market cap computation
+    company_result = await db.execute(
+        select(Company).where(Company.ticker == ticker)
+    )
+    company = company_result.scalar_one_or_none()
+    latest_price: float | None = None
+    mcap: int | None = None
+    if company:
+        ph_result = await db.execute(
+            select(CompanyPriceHistory).where(
+                CompanyPriceHistory.company_id == company.id
+            )
+        )
+        ph = ph_result.scalar_one_or_none()
+        if ph and ph.prices:
+            last_pt = ph.prices[-1]
+            latest_price = last_pt.get("price") or last_pt.get("close")
+
+    # Derive P/E and P/B from latest price + financials
+    eps = fv.get("inc_epsDiluted")
+    net_income = fv.get("inc_netIncome")
+    book_value = fv.get("bal_totalStockholdersEquity")
+
+    pe_ratio: float | None = None
+    pb_ratio: float | None = None
+    if latest_price and eps and eps > 0:
+        pe_ratio = round(latest_price / eps, 1)
+    if latest_price and eps and eps != 0 and net_income and book_value and book_value > 0:
+        shares = abs(net_income / eps)
+        mcap = int(latest_price * shares)
+        pb_ratio = round((latest_price * shares) / book_value, 1)
+
+    d["market_cap_usd"] = mcap
+
+    key_ratios: dict = {
+        "pe_ratio": pe_ratio,
+        "pb_ratio": pb_ratio,
+    }
+    # Profitability
+    for k in ("roe", "roa", "net_margin", "gross_margin", "operating_margin", "ebitda_margin"):
+        key_ratios[k] = fv.get(k)
+    # Growth
+    for k in ("revenue_growth", "eps_growth"):
+        key_ratios[k] = fv.get(k)
+    # Risk / Capital
+    for k in ("debt_equity", "current_ratio", "interest_coverage"):
+        key_ratios[k] = fv.get(k)
+    # Cash flow
+    key_ratios["fcf_yield"] = fv.get("fcf_yield") or fv.get("fcf_to_net_income")
+    key_ratios["dividend_yield"] = fv.get("dividend_payout")
+
+    d["key_ratios"] = key_ratios
     return d
 
 
