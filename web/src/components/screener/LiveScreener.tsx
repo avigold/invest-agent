@@ -10,7 +10,8 @@ import {
   useUpdateSavedScreen,
   useDeleteSavedScreen,
 } from "@/lib/queries";
-import { apiJson, apiFetch } from "@/lib/api";
+import { apiJson } from "@/lib/api";
+import { exportToCsv, todayStr } from "@/lib/export";
 
 interface ScreenResponse {
   total: number;
@@ -171,33 +172,22 @@ export default function LiveScreener() {
     setActiveScreenName(null);
   }, []);
 
-  const handleExport = useCallback(async () => {
-    const valid = rules.filter((r) => {
-      if (!r.field) return false;
-      if (Array.isArray(r.value)) return r.value.length > 0;
-      return r.value !== "" && r.value != null;
-    });
-    try {
-      const res = await apiFetch("/v1/screener/live/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          filters: { rules: valid },
-          sort_by: sortBy,
-          sort_desc: sortDesc,
-        }),
-      });
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "screen_results.csv";
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      // ignore export errors
-    }
-  }, [rules, sortBy, sortDesc]);
+  const handleExport = useCallback(() => {
+    if (!rows.length) return;
+    const fmtPct = (v: number | null | undefined) => (v != null ? (v * 100).toFixed(1) + "%" : "");
+    exportToCsv(
+      `screener_${todayStr()}.csv`,
+      ["Ticker", "Name", "Country", "Sector", "P/E", "P/B", "ROE", "Net Margin", "Rev Growth", "ML Prob", "Classification"],
+      rows.map((r) => [
+        r.ticker, r.company_name, r.country, r.sector,
+        r.pe_ratio != null ? r.pe_ratio.toFixed(1) : "",
+        r.pb_ratio != null ? r.pb_ratio.toFixed(1) : "",
+        fmtPct(r.roe), fmtPct(r.net_margin), fmtPct(r.revenue_growth),
+        fmtPct(r.probability),
+        r.det_classification ?? "",
+      ]),
+    );
+  }, [rows]);
 
   return (
     <div className="space-y-4">
@@ -211,6 +201,7 @@ export default function LiveScreener() {
         onUpdate={handleUpdate}
         onDelete={handleDelete}
         hasFilters={rules.length > 0}
+        hasRows={rows.length > 0}
         onClear={handleClear}
         onExport={handleExport}
       />

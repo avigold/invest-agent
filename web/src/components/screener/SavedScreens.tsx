@@ -20,6 +20,7 @@ interface Props {
   onUpdate: () => void;
   onDelete: (id: string) => void;
   hasFilters: boolean;
+  hasRows: boolean;
   onClear: () => void;
   onExport: () => void;
 }
@@ -33,6 +34,7 @@ export default function SavedScreens({
   onUpdate,
   onDelete,
   hasFilters,
+  hasRows,
   onClear,
   onExport,
 }: Props) {
@@ -156,9 +158,13 @@ export default function SavedScreens({
       )}
       <button
         onClick={onExport}
-        className="rounded px-3 py-1.5 text-sm text-gray-500 hover:text-white transition-colors"
+        disabled={!hasRows}
+        title="Export CSV"
+        className="rounded-lg border border-gray-700 bg-gray-800 p-2 text-gray-400 hover:bg-gray-700 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
       >
-        Export CSV
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
       </button>
     </div>
   );
