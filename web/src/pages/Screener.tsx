@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useEffect } from "react";
 import { useUser } from "@/lib/auth";
 import { apiJson } from "@/lib/api";
 import { useScreenerResults } from "@/lib/queries";
+
+const LiveScreener = lazy(() => import("@/components/screener/LiveScreener"));
 
 interface ScreenResultSummary {
   id: string;
@@ -36,22 +37,77 @@ function fmtDate(iso: string): string {
   });
 }
 
+type Tab = "screen" | "historical";
+
 export default function Screener() {
   const { user, loading } = useUser();
+  const navigate = useNavigate();
+  const [tab, setTab] = useState<Tab>("screen");
+
+  useEffect(() => {
+    if (!loading && !user) navigate("/login", { replace: true });
+  }, [user, loading, navigate]);
+
+  if (loading || !user) return null;
+
+  return (
+    <div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-white">Stock Screener</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          Filter companies on financial metrics or analyse historical patterns
+        </p>
+      </div>
+
+      {/* Tabs */}
+      <div className="mb-6 flex gap-1 rounded-lg bg-gray-900/80 p-1 border border-gray-800 w-fit">
+        <button
+          onClick={() => setTab("screen")}
+          className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            tab === "screen"
+              ? "bg-gray-700 text-white"
+              : "text-gray-400 hover:text-white"
+          }`}
+        >
+          Screen
+        </button>
+        <button
+          onClick={() => setTab("historical")}
+          className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            tab === "historical"
+              ? "bg-gray-700 text-white"
+              : "text-gray-400 hover:text-white"
+          }`}
+        >
+          Historical Patterns
+        </button>
+      </div>
+
+      {tab === "screen" ? (
+        <Suspense
+          fallback={
+            <div className="py-12 text-center text-gray-600">Loading screener...</div>
+          }
+        >
+          <LiveScreener />
+        </Suspense>
+      ) : (
+        <HistoricalScreener />
+      )}
+    </div>
+  );
+}
+
+function HistoricalScreener() {
   const navigate = useNavigate();
   const { data: results = [] } = useScreenerResults<ScreenResultSummary[]>();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // Form state
   const [returnThreshold, setReturnThreshold] = useState(300);
   const [windowYears, setWindowYears] = useState(5);
   const [lookbackYears, setLookbackYears] = useState(20);
   const [includeFundamentals, setIncludeFundamentals] = useState(true);
-
-  useEffect(() => {
-    if (!loading && !user) navigate("/login", { replace: true });
-  }, [user, loading, navigate]);
 
   const runScreen = async () => {
     setSubmitting(true);
@@ -79,24 +135,14 @@ export default function Screener() {
     }
   };
 
-  if (loading || !user) return null;
-
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Historical Stock Screener</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Find companies that hit exceptional return thresholds and analyze their common features
-        </p>
-      </div>
-
+    <>
       {error && (
         <div className="mb-4 rounded border border-red-800 bg-red-900/30 px-4 py-2 text-sm text-red-300">
           {error}
         </div>
       )}
 
-      {/* Configuration */}
       <div className="mb-8 rounded-xl border border-gray-800 bg-gray-900/80 p-6">
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-400">
           Configure Screen
@@ -177,7 +223,6 @@ export default function Screener() {
         </div>
       </div>
 
-      {/* Past Results */}
       <div>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-400">
           Past Results ({results.length})
@@ -244,6 +289,6 @@ export default function Screener() {
           </table>
         </div>
       </div>
-    </div>
+    </>
   );
 }

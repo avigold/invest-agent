@@ -21,6 +21,8 @@ export const queryKeys = {
   job: (id: string) => ["job", id] as const,
   screenerResults: () => ["screenerResults"] as const,
   screenerResult: (id: string) => ["screenerResult", id] as const,
+  screenFields: () => ["screenFields"] as const,
+  savedScreens: () => ["savedScreens"] as const,
   chart: (ticker: string, period: string, benchmark?: string) => ["chart", ticker, period, benchmark ?? null] as const,
   scoringProfiles: () => ["scoringProfiles"] as const,
   scoringDefaults: () => ["scoringDefaults"] as const,
@@ -263,6 +265,64 @@ export function useRecommendationDetail<T = unknown>(ticker: string) {
     queryKey: queryKeys.recommendation(ticker),
     queryFn: () => apiJson<T>(`/v1/recommendation/${ticker}`),
     enabled: !!ticker,
+  });
+}
+
+// ── Live screener hooks ──────────────────────────────────────────────────
+
+export function useScreenFields<T = unknown>() {
+  return useQuery<T>({
+    queryKey: queryKeys.screenFields(),
+    queryFn: () => apiJson<T>("/v1/screener/live/fields"),
+    staleTime: 300_000,
+  });
+}
+
+export function useSavedScreens<T = unknown>() {
+  return useQuery<T>({
+    queryKey: queryKeys.savedScreens(),
+    queryFn: () => apiJson<T>("/v1/screener/saved"),
+  });
+}
+
+export function useSaveScreen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string; filters: unknown; sort_by?: string; sort_desc?: boolean }) =>
+      apiJson("/v1/screener/saved", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.savedScreens() });
+    },
+  });
+}
+
+export function useUpdateSavedScreen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string; name: string; filters: unknown; sort_by?: string; sort_desc?: boolean }) =>
+      apiJson(`/v1/screener/saved/${data.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.savedScreens() });
+    },
+  });
+}
+
+export function useDeleteSavedScreen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch(`/v1/screener/saved/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.savedScreens() });
+    },
   });
 }
 

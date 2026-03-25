@@ -534,3 +534,29 @@ class WatchlistItem(Base):
 
     user: Mapped[User] = relationship()
     company: Mapped[Company] = relationship()
+
+
+class SavedScreen(Base):
+    __tablename__ = "saved_screens"
+    __table_args__ = (
+        Index("ix_saved_screens_user_id", "user_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    filters: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    sort_by: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    sort_desc: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    columns: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+    user: Mapped[User] = relationship()

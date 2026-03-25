@@ -11,7 +11,7 @@ Goal: Make Invest Agent a less-expensive alternative to a Bloomberg terminal or 
 | 3 | **Volume on chart** — Volume bars under price chart (lightweight-charts supports natively) | Done | PRD 10.2 |
 | 4 | **Benchmark comparison** — Stock performance vs S&P 500 / sector ETF | Done | PRD 10.2 |
 | 5 | **Key ratio dashboard** — Clean card layout of P/E, P/B, ROE, margins | Done | PRD 10.3 |
-| 6 | **Saved screener configs** — Persist and reuse screener filters | Not Started | |
+| 6 | **Saved screener configs** — Persist and reuse screener filters + live screener | Done | PRD 10.4 |
 | 7 | **Recommendation change alerts** — Surface when Buy/Hold/Sell flips | Not Started | |
 
 ## Medium Effort, High Value
