@@ -12,15 +12,15 @@ Goal: Make Invest Agent a less-expensive alternative to a Bloomberg terminal or 
 | 4 | **Benchmark comparison** — Stock performance vs S&P 500 / sector ETF | Done | PRD 10.2 |
 | 5 | **Key ratio dashboard** — Clean card layout of P/E, P/B, ROE, margins | Done | PRD 10.3 |
 | 6 | **Saved screener configs** — Persist and reuse screener filters + live screener | Done | PRD 10.4 |
-| 7 | **Recommendation change alerts** — Surface when Buy/Hold/Sell flips | Not Started | |
+| 7 | **Recommendation change alerts** — Surface when Buy/Hold/Sell flips | Done | PRD 10.6 |
 
 ## Medium Effort, High Value
 
 | # | Feature | Status | PRD |
 |---|---------|--------|-----|
-| 8 | **Peer/comparable analysis** — Side-by-side metric comparison of 2-5 companies | Not Started | |
-| 9 | **Multi-ticker chart overlay** — Compare price histories on one chart | Not Started | |
-| 10 | **Relative valuation** — Company multiples vs sector/industry medians | Not Started | |
+| 8 | **Peer/comparable analysis** — Side-by-side metric comparison of 2-5 companies | Done | PRD 10.5 |
+| 9 | **Multi-ticker chart overlay** — Compare price histories on one chart | Done | PRD 10.7 |
+| 10 | **Relative valuation** — Company multiples vs sector/industry medians | Done | PRD 10.8 |
 | 11 | **Portfolio tracker** — Log holdings, cost basis, P&L, allocation breakdown | Not Started | |
 | 12 | **Financial statements** — Full income/balance/cashflow display (quarterly + annual) | Not Started | |
 | 13 | **Company news feed** — Aggregated headlines per ticker (RSS, free APIs) | Not Started | |

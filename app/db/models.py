@@ -536,6 +536,46 @@ class WatchlistItem(Base):
     company: Mapped[Company] = relationship()
 
 
+class SectorValuationStats(Base):
+    """Precomputed percentile stats for sector-specific valuation metrics."""
+    __tablename__ = "sector_valuation_stats"
+    __table_args__ = (
+        UniqueConstraint("gics_code", "as_of", "calc_version", name="uq_sector_valuation_version"),
+        Index("ix_sector_valuation_as_of", "as_of"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    gics_code: Mapped[str] = mapped_column(String(2), nullable=False)
+    sector_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    as_of: Mapped[date_type] = mapped_column(Date, nullable=False)
+    calc_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    company_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    metrics: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+
+class SignalChange(Base):
+    """Records when a company's Buy/Hold/Sell classification flips."""
+    __tablename__ = "signal_changes"
+    __table_args__ = (
+        Index("ix_signal_changes_detected_at", "detected_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    ticker: Mapped[str] = mapped_column(String(20), nullable=False)
+    company_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    system: Mapped[str] = mapped_column(String(20), nullable=False)
+    old_classification: Mapped[str] = mapped_column(String(10), nullable=False)
+    new_classification: Mapped[str] = mapped_column(String(10), nullable=False)
+    old_score: Mapped[float] = mapped_column(Float, nullable=False)
+    new_score: Mapped[float] = mapped_column(Float, nullable=False)
+    detected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+
 class SavedScreen(Base):
     __tablename__ = "saved_screens"
     __table_args__ = (

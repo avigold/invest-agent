@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import { useEffect } from "react";
 import { useUser } from "@/lib/auth";
 import { useCompanyDetail, useMLStockDetail } from "@/lib/queries";
 import ScoreCard from "@/components/ScoreCard";
 import StockChart from "@/components/StockChart";
 import KeyRatios from "@/components/KeyRatios";
+import ValuationVsPeers from "@/components/ValuationVsPeers";
 import WatchlistButton from "@/components/WatchlistButton";
 
 // ── Types (deterministic) ─────────────────────────────────────────────
@@ -405,6 +406,12 @@ export default function StockDetail() {
           <h1 className="text-3xl font-bold text-white">{companyName}</h1>
           <span className="rounded bg-gray-800 px-2 py-1 text-sm text-gray-400">{displayTicker}</span>
           <WatchlistButton ticker={displayTicker} />
+          <Link
+            to={`/compare?tickers=${displayTicker}`}
+            className="rounded border border-gray-700 px-2.5 py-1 text-xs text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+          >
+            Compare
+          </Link>
           {ml && ml.suggested_weight > 0 && (
             <span className="rounded-full border border-green-800 bg-green-900/50 px-2 py-0.5 text-xs text-green-300">
               In Portfolio
@@ -457,6 +464,9 @@ export default function StockDetail() {
       {!ml?.key_ratios && packet?.component_data?.fundamental_ratios && (
         <KeyRatios ratios={packet.component_data.fundamental_ratios} />
       )}
+
+      {/* Valuation vs sector peers */}
+      <ValuationVsPeers ticker={displayTicker} />
 
       {/* No scoring data available */}
       {!ml && !packet && (

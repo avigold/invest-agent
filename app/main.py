@@ -19,6 +19,7 @@ from app.api.routes_scoring_profiles import router as scoring_profiles_router
 from app.api.routes_screener import router as screener_router
 from app.api.routes_live_screener import router as live_screener_router
 from app.api.routes_predictions import router as predictions_router
+from app.api.routes_signals import router as signals_router
 from app.api.routes_watchlist import router as watchlist_router
 from app.api.routes_countries import router as countries_router
 from app.api.routes_industries import router as industries_router
@@ -98,6 +99,7 @@ def create_app() -> FastAPI:
     app.include_router(live_screener_router)
     app.include_router(predictions_router)
     app.include_router(watchlist_router)
+    app.include_router(signals_router)
     app.include_router(admin_router)
 
     # Serve built frontend in production (when web/dist/ exists)

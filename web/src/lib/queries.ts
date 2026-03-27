@@ -35,6 +35,8 @@ export const queryKeys = {
   dashboardIndustries: () => ["dashboardIndustries"] as const,
   watchlist: () => ["watchlist"] as const,
   watchlistCheck: (ticker: string) => ["watchlistCheck", ticker] as const,
+  signalChanges: () => ["signalChanges"] as const,
+  peerValuation: (ticker: string) => ["peerValuation", ticker] as const,
 } as const;
 
 // ── Detail hooks (Phase 1) ──────────────────────────────────────────────
@@ -453,5 +455,68 @@ export function useBulkAddToWatchlist() {
       qc.invalidateQueries({ queryKey: queryKeys.watchlist() });
       qc.invalidateQueries({ queryKey: ["watchlistCheck"] });
     },
+  });
+}
+
+// ── Signal changes hooks ────────────────────────────────────────────────
+
+export interface SignalChangeItem {
+  id: string;
+  ticker: string;
+  company_name: string;
+  system: string;
+  old_classification: string;
+  new_classification: string;
+  old_score: number;
+  new_score: number;
+  detected_at: string;
+}
+
+export function useSignalChanges() {
+  return useQuery<SignalChangeItem[]>({
+    queryKey: queryKeys.signalChanges(),
+    queryFn: () => apiJson<SignalChangeItem[]>("/v1/signals/changes?limit=10"),
+    staleTime: 60_000,
+  });
+}
+
+// ── Peer Valuation ────────────────────────────────────────────────────
+
+export interface PeerMetricStats {
+  p10: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p90: number;
+}
+
+export interface PeerMetric {
+  key: string;
+  label: string;
+  format: "multiple" | "pct";
+  higher_is_better: boolean;
+  company_value: number | null;
+  percentile_rank: number | null;
+  stats: PeerMetricStats;
+}
+
+export interface PeerValuationData {
+  ticker: string;
+  sector: string;
+  gics_code: string;
+  company_count: number;
+  metrics: PeerMetric[];
+}
+
+export function usePeerValuation(ticker: string) {
+  return useQuery<PeerValuationData>({
+    queryKey: queryKeys.peerValuation(ticker),
+    queryFn: () =>
+      apiJson<PeerValuationData>(
+        `/v1/company/${ticker.replace(/\./g, "-")}/peer-valuation`,
+      ),
+    enabled: !!ticker,
+    retry: false,
+    staleTime: 300_000,
   });
 }

@@ -15,6 +15,7 @@ from app.db.models import PredictionModel, PredictionScore
 from app.predict.model import TrainedModel
 from app.predict.scorer import score_current_universe
 from app.predict.strategy import build_portfolio
+from app.score.signal_changes import snapshot_ml, detect_and_log_changes
 
 if TYPE_CHECKING:
     from app.jobs.registry import LiveJob
@@ -81,6 +82,9 @@ async def prediction_score_handler(
         portfolio = build_portfolio(pred_dicts)
         weight_map = {p.ticker: p.weight for p in portfolio}
 
+        # Snapshot old classifications before delete
+        old_snap = await snapshot_ml(db, pred_model.id)
+
         # Delete old scores for this model
         await db.execute(
             sql_delete(PredictionScore).where(
@@ -110,4 +114,11 @@ async def prediction_score_handler(
 
         _log(job, f"\nScores updated: {len(scored)} companies")
         _log(job, f"Top: {scored[0].ticker} (p={scored[0].probability:.3f})" if scored else "")
+
+        # Detect classification changes
+        new_snap = await snapshot_ml(db, pred_model.id)
+        n_changes = await detect_and_log_changes(db, old_snap, new_snap, "ml")
+        if n_changes:
+            _log(job, f"Signal changes detected: {n_changes}")
+
         _log(job, "Done.")

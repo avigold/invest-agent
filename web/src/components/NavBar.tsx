@@ -29,6 +29,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/ml/models", label: "Models" },
       { to: "/fundamentals", label: "Fundamentals" },
       { to: "/screener", label: "Screener" },
+      { to: "/compare", label: "Compare" },
     ],
   },
   {

@@ -9,6 +9,8 @@ import {
   useMLLatestScores,
   useMLModels,
   useMLModel,
+  useSignalChanges,
+  type SignalChangeItem,
 } from "@/lib/queries";
 import JobsTable, { JobRow } from "@/components/JobsTable";
 import StockChart from "@/components/StockChart";
@@ -327,6 +329,80 @@ function ProbabilityBars({ picks }: { picks: MLScore[] }) {
   );
 }
 
+function SignalChangesCard({ changes }: { changes: SignalChangeItem[] }) {
+  if (changes.length === 0) return null;
+
+  const isUpgrade = (old_cls: string, new_cls: string) => {
+    const rank: Record<string, number> = { Sell: 0, Hold: 1, Buy: 2 };
+    return (rank[new_cls] ?? 0) > (rank[old_cls] ?? 0);
+  };
+
+  const timeAgo = (iso: string) => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
+  };
+
+  const clsBadge = (cls: string) => {
+    if (cls === "Buy") return "text-green-400";
+    if (cls === "Hold") return "text-yellow-400";
+    return "text-red-400";
+  };
+
+  return (
+    <div className="rounded-xl border border-gray-800 bg-gray-900/80 p-5 mb-8">
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-4">
+        Signal Changes
+      </h2>
+      <div className="space-y-2">
+        {changes.map((c) => {
+          const up = isUpgrade(c.old_classification, c.new_classification);
+          return (
+            <div
+              key={c.id}
+              className="flex items-center gap-3 rounded-lg border border-gray-800/50 px-3 py-2"
+            >
+              {/* Direction arrow */}
+              <span className={`text-lg ${up ? "text-green-400" : "text-red-400"}`}>
+                {up ? "\u2191" : "\u2193"}
+              </span>
+              {/* Ticker */}
+              <Link
+                to={`/stocks/${c.ticker}`}
+                className="w-20 flex-shrink-0 font-medium text-white hover:text-blue-400 text-sm"
+              >
+                {c.ticker}
+              </Link>
+              {/* Classification change */}
+              <div className="flex items-center gap-1.5 text-sm">
+                <span className={`font-semibold ${clsBadge(c.old_classification)}`}>
+                  {c.old_classification}
+                </span>
+                <span className="text-gray-600">&rarr;</span>
+                <span className={`font-semibold ${clsBadge(c.new_classification)}`}>
+                  {c.new_classification}
+                </span>
+              </div>
+              {/* System pill */}
+              <span className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] uppercase text-gray-500">
+                {c.system === "ml" ? "ML" : "Det"}
+              </span>
+              {/* Timestamp */}
+              <span className="ml-auto text-xs text-gray-600">
+                {timeAgo(c.detected_at)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Dashboard ─────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -339,6 +415,9 @@ export default function Dashboard() {
   const { data: topCompanies = [] } = useDashboardCompanies<CompanyPreview[]>();
   const { data: topIndustries = [] } = useDashboardIndustries<IndustryPreview[]>();
   const { data: latestScoresData } = useMLLatestScores<LatestScores>();
+
+  // Signal changes
+  const { data: signalChanges = [] } = useSignalChanges();
 
   // New: model stats for hero cards + equity curve
   const { data: allModels = [] } = useMLModels<ModelSummary[]>();
@@ -437,6 +516,9 @@ export default function Dashboard() {
 
       {/* ── 4. Probability Bars (#2-#10) ─────────────────────────────── */}
       {barPicks.length > 0 && <ProbabilityBars picks={barPicks} />}
+
+      {/* ── 5. Signal Changes ──────────────────────────────────────── */}
+      <SignalChangesCard changes={signalChanges} />
 
       {/* ── Traditional Fundamentals section header ─────────────────── */}
       <div className="mb-5 mt-2">

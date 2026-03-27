@@ -38,6 +38,8 @@ COMPANY_WEIGHTS_NO_FUNDAMENTALS = {
 }
 
 # Recommendation constants
+SECTOR_VALUATION_CALC_VERSION = "sector_val_v1"
+
 RECOMMENDATION_VERSION = "recommendation_v2"
 RECOMMENDATION_WEIGHTS = {"country": 0.20, "industry": 0.20, "company": 0.60}
 RECOMMENDATION_THRESHOLDS = {"buy": 70, "sell": 40}

@@ -22,10 +22,19 @@ from app.db.models import (
     DecisionPacket,
     Industry,
     IndustryScore,
+    PredictionModel,
+    PredictionScore,
+    SectorValuationStats,
     User,
 )
 from app.db.session import get_db
 from app.ingest.fmp import fetch_historical_prices
+from app.score.sector_metrics import (
+    METRIC_DEFINITIONS,
+    SECTOR_METRICS,
+    compute_valuation_ratios,
+    extract_metric_value,
+)
 from app.score.versions import (
     COMPANY_CALC_VERSION,
     COMPANY_SUMMARY_VERSION,
@@ -521,3 +530,138 @@ async def company_chart(
         content=content,
         headers={"Cache-Control": f"private, max-age={cache_max_age}"},
     )
+
+
+# ── Peer Valuation ───────────────────────────────────────────────────
+
+
+def _interpolate_percentile(value: float, stats: dict) -> int:
+    """Compute approximate percentile rank from p10/p25/p50/p75/p90 breakpoints."""
+    breakpoints = [
+        (10, stats["p10"]),
+        (25, stats["p25"]),
+        (50, stats["p50"]),
+        (75, stats["p75"]),
+        (90, stats["p90"]),
+    ]
+    if value <= breakpoints[0][1]:
+        return 5
+    if value >= breakpoints[-1][1]:
+        return 95
+    for i in range(len(breakpoints) - 1):
+        p_lo, v_lo = breakpoints[i]
+        p_hi, v_hi = breakpoints[i + 1]
+        if v_lo <= value <= v_hi:
+            if v_hi == v_lo:
+                return (p_lo + p_hi) // 2
+            frac = (value - v_lo) / (v_hi - v_lo)
+            return int(p_lo + frac * (p_hi - p_lo))
+    return 50
+
+
+@router.get("/company/{ticker}/peer-valuation")
+async def peer_valuation(
+    ticker: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return company's valuation ratios compared to sector peer percentiles."""
+    ticker = ticker.replace("-", ".").upper()
+
+    # Look up company
+    result = await db.execute(
+        select(Company).where(Company.ticker == ticker)
+    )
+    company = result.scalar_one_or_none()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    gics_code = company.gics_code or ""
+    if len(gics_code) < 2:
+        raise HTTPException(status_code=404, detail="No sector classification")
+
+    # Use first 2 chars for sector-level grouping
+    sector_code = gics_code[:2]
+    metric_keys = SECTOR_METRICS.get(sector_code)
+    if not metric_keys:
+        raise HTTPException(status_code=404, detail="No metrics defined for sector")
+
+    # Load sector valuation stats (most recent)
+    stats_result = await db.execute(
+        select(SectorValuationStats)
+        .where(SectorValuationStats.gics_code == sector_code)
+        .order_by(desc(SectorValuationStats.as_of))
+        .limit(1)
+    )
+    sector_stats = stats_result.scalar_one_or_none()
+    if not sector_stats:
+        raise HTTPException(status_code=404, detail="No sector stats available")
+
+    # Load company's PredictionScore (most recent model)
+    model_result = await db.execute(
+        select(PredictionModel)
+        .order_by(PredictionModel.created_at.desc())
+        .limit(1)
+    )
+    model = model_result.scalar_one_or_none()
+
+    feature_values: dict = {}
+    if model:
+        score_result = await db.execute(
+            select(PredictionScore).where(
+                PredictionScore.model_id == model.id,
+                PredictionScore.ticker == ticker,
+            )
+        )
+        pred_score = score_result.scalar_one_or_none()
+        if pred_score:
+            feature_values = pred_score.feature_values or {}
+
+    # Get latest price for P/E, P/B
+    ph_result = await db.execute(
+        select(CompanyPriceHistory).where(
+            CompanyPriceHistory.company_id == company.id
+        )
+    )
+    ph = ph_result.scalar_one_or_none()
+    latest_price: float | None = None
+    if ph and ph.prices:
+        last_pt = ph.prices[-1]
+        latest_price = last_pt.get("price") or last_pt.get("close")
+
+    val_ratios = compute_valuation_ratios(latest_price, feature_values)
+
+    # Build response metrics
+    metrics_response = []
+    stored_metrics = sector_stats.metrics or {}
+
+    for key in metric_keys:
+        defn = METRIC_DEFINITIONS.get(key)
+        if not defn:
+            continue
+        stats = stored_metrics.get(key)
+        if not stats:
+            continue
+
+        company_value = extract_metric_value(key, feature_values, val_ratios)
+        percentile_rank = None
+        if company_value is not None:
+            percentile_rank = _interpolate_percentile(company_value, stats)
+
+        metrics_response.append({
+            "key": key,
+            "label": defn["label"],
+            "format": defn["format"],
+            "higher_is_better": defn["higher_is_better"],
+            "company_value": round(company_value, 4) if company_value is not None else None,
+            "percentile_rank": percentile_rank,
+            "stats": stats,
+        })
+
+    return {
+        "ticker": ticker,
+        "sector": sector_stats.sector_name,
+        "gics_code": sector_code,
+        "company_count": sector_stats.company_count,
+        "metrics": metrics_response,
+    }

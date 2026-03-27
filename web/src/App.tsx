@@ -23,6 +23,7 @@ const Predictions = lazy(() => import("@/pages/Predictions"));
 const PredictionDetail = lazy(() => import("@/pages/PredictionDetail"));
 const MLPicks = lazy(() => import("@/pages/MLPicks"));
 const Watchlist = lazy(() => import("@/pages/Watchlist"));
+const Compare = lazy(() => import("@/pages/Compare"));
 
 function RedirectToStock() {
   const { ticker } = useParams<{ ticker: string }>();
@@ -64,6 +65,7 @@ export default function App() {
                   <Route path="/ml/picks/:ticker" element={<RedirectToStock />} />
                   <Route path="/ml/models" element={<Predictions />} />
                   <Route path="/ml/models/:id" element={<PredictionDetail />} />
+                  <Route path="/compare" element={<Compare />} />
                   <Route path="/admin" element={<Admin />} />
                 </Routes>
               </main>

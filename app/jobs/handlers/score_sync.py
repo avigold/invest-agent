@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.db.models import Company, CompanyRiskRegister, CompanyScore
 from app.packets.company_packets import build_company_packet
 from app.score.company import compute_company_scores, detect_company_risks
+from app.score.sector_valuation import compute_sector_valuation_stats
+from app.score.signal_changes import snapshot_deterministic, detect_and_log_changes
 from app.score.versions import COMPANY_CALC_VERSION
 
 if TYPE_CHECKING:
@@ -75,6 +77,9 @@ async def score_sync_handler(
         if not companies_to_score:
             _log(job, "All companies already scored for this period.")
             return
+
+        # Snapshot classifications before scoring
+        old_snap = await snapshot_deterministic(db)
 
         # Process in batches
         all_scores: list[CompanyScore] = []
@@ -159,6 +164,24 @@ async def score_sync_handler(
             )
             packet_count += 1
 
+        await db.commit()
+
+        # Detect classification changes
+        new_snap = await snapshot_deterministic(db)
+        n_changes = await detect_and_log_changes(
+            db, old_snap, new_snap, "deterministic"
+        )
+        if n_changes:
+            _log(job, f"Signal changes detected: {n_changes}")
+
+        # Compute sector valuation stats (peer percentiles)
+        _log(job, "\n--- Computing Sector Valuation Stats ---")
+        valuation_rows = await compute_sector_valuation_stats(
+            db=db,
+            as_of=as_of,
+            log_fn=lambda msg: _log(job, msg),
+        )
+        _log(job, f"  Sector valuation stats: {len(valuation_rows)} sectors")
         await db.commit()
 
     elapsed = time.monotonic() - start_time
